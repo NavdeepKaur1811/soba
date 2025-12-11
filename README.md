@@ -1,4 +1,4 @@
-## Submit-CS
+## CS Submit Form Wrapper
 
 ### Overview
 This repository serves an api. This API uses configurable JWT secret, issuer and audience to handle user verification.
@@ -12,3 +12,6 @@ This repository is built with node v24.4.1 and is set up inside the .nvmrc
 
 ### Docker
 The docker file exists but is untested
+
+### Form Wrapper
+This project serves as a wrapper for formio currnetly, but it is not tied to formio, it can wrap other projects and multiple projects
