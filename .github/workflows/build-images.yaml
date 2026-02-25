@@ -174,7 +174,7 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.prepare.outputs.image_version }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.component }},push-by-digest=true,name-canonical=true,push=true
           provenance: false
           sbom: false
 
