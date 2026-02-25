@@ -239,9 +239,13 @@ jobs:
             DIGESTS="${DIGESTS} ${IMAGE}@$(cat $f)"
           done
           [ -n "$DIGESTS" ] || { echo "No backend digests"; exit 1; }
-          docker buildx imagetools create -t ${IMAGE}:sha-${SHORT_SHA} -t ${IMAGE}:${IMAGE_VERSION} ${DIGESTS}
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.description=SOBA API backend for form data management" \
+            -t ${IMAGE}:sha-${SHORT_SHA} -t ${IMAGE}:${IMAGE_VERSION} ${DIGESTS}
           if [ "$IMAGE_VERSION" = "main" ]; then
-            docker buildx imagetools create -t ${IMAGE}:latest ${DIGESTS}
+            docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.description=SOBA API backend for form data management" \
+              -t ${IMAGE}:latest ${DIGESTS}
           fi
 
       - name: Merge frontend
@@ -254,7 +258,11 @@ jobs:
             DIGESTS="${DIGESTS} ${IMAGE}@$(cat $f)"
           done
           [ -n "$DIGESTS" ] || { echo "No frontend digests"; exit 1; }
-          docker buildx imagetools create -t ${IMAGE}:sha-${SHORT_SHA} -t ${IMAGE}:${IMAGE_VERSION} ${DIGESTS}
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.description=SOBA Next.js frontend for web form builder" \
+            -t ${IMAGE}:sha-${SHORT_SHA} -t ${IMAGE}:${IMAGE_VERSION} ${DIGESTS}
           if [ "$IMAGE_VERSION" = "main" ]; then
-            docker buildx imagetools create -t ${IMAGE}:latest ${DIGESTS}
+            docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.description=SOBA Next.js frontend for web form builder" \
+              -t ${IMAGE}:latest ${DIGESTS}
           fi
