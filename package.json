@@ -4,8 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "lint": "pnpm --filter @soba/* run lint",
-    "check": "pnpm --filter @soba/* run check",
+    "lint": "pnpm lint:frontend && pnpm lint:backend",
+    "lint:frontend": "pnpm --filter frontend run lint",
+    "lint:backend": "pnpm --filter backend run lint",
+    "check": "pnpm check:frontend && pnpm check:backend",
+    "check:frontend": "pnpm --filter frontend run check",
+    "check:backend": "pnpm --filter backend run check",
     "prepare": "husky"
   },
   "keywords": [],
