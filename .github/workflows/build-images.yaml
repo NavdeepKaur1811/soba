@@ -78,6 +78,10 @@ on:
 env:
   REGISTRY: ghcr.io
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
