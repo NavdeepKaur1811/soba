@@ -1,6 +1,5 @@
 import pino from 'pino';
 import rTracer from 'cls-rtracer';
-import { createDevPrettyStream } from './devPrettyStream';
 
 /**
  * Correlation ID (request id) from CLS. Use this when building log payloads
@@ -16,6 +15,10 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 const pinoOptions: pino.LoggerOptions = {
   level: process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info'),
+  redact: {
+    paths: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
+    censor: '[REDACTED]',
+  },
   mixin() {
     const requestId = getCorrelationId();
     return requestId != null ? { requestId } : {};
@@ -23,9 +26,18 @@ const pinoOptions: pino.LoggerOptions = {
 };
 
 if (isDev) {
-  const devStream = createDevPrettyStream();
-  devStream.pipe(process.stdout);
-  Object.assign(pinoOptions, { dest: devStream });
+  Object.assign(pinoOptions, {
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname',
+        singleLine: true,
+        messageFormat: '{req.method} {req.url} {res.statusCode} {responseTime}ms rid={requestId}',
+      },
+    },
+  });
 }
 
 const rootLogger = pino(pinoOptions);

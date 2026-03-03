@@ -13,8 +13,7 @@ import { healthRouter } from './core/api/health';
 import { metaRouter } from './core/api/meta';
 import { buildOpenApiSpec } from './core/api/shared/openapi';
 import swaggerUi from 'swagger-ui-express';
-import { log } from './core/logging';
-import pinoHttp from 'pino-http';
+import { httpLogger, log } from './core/logging';
 
 const app = express();
 const port = 4000;
@@ -44,13 +43,8 @@ app.use(
   }),
 );
 
-// HTTP request/response logging (correlation id is added by logger mixin and genReqId).
-app.use(
-  pinoHttp({
-    logger: log,
-    genReqId: (): string | number | undefined => rTracer.id() as string | number | undefined,
-  }),
-);
+// HTTP request/response logging.
+app.use(httpLogger);
 
 // ——— Public routes (no authentication) ———
 app.get('/api/docs/openapi.json', (_req, res) => {

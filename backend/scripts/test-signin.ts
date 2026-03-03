@@ -119,6 +119,28 @@ async function callSignIn(
   return { ok: res.ok, status: res.status, body, text };
 }
 
+async function callAuthedJson(
+  token: string,
+  path: string,
+): Promise<{ ok: boolean; status: number; body: unknown; text: string }> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const text = await res.text();
+  const body = (() => {
+    try {
+      return text ? (JSON.parse(text) as unknown) : {};
+    } catch {
+      return { raw: text };
+    }
+  })();
+  return { ok: res.ok, status: res.status, body, text };
+}
+
 async function verifyDbRecords(
   providerCode: string,
   subject: string,
@@ -236,6 +258,61 @@ async function verifyDbRecords(
   };
 }
 
+type WorkspaceItem = {
+  id: string;
+  name: string;
+  slug: string | null;
+  kind: string;
+  role: string;
+  status: string;
+};
+
+type WorkspaceListResponse = {
+  items: WorkspaceItem[];
+  page?: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    cursorMode: string;
+  };
+};
+
+type MemberItem = {
+  id: string;
+  userId: string;
+  displayLabel: string | null;
+  role: string;
+  status: string;
+};
+
+type MembersListResponse = {
+  items: MemberItem[];
+  page?: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    cursorMode: string;
+  };
+};
+
+type SobaAdminItem = {
+  userId: string;
+  source: string;
+  identityProviderCode: string | null;
+  syncedAt: string | null;
+  displayLabel: string | null;
+};
+
+type SobaAdminsListResponse = {
+  items: SobaAdminItem[];
+  page?: {
+    limit: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    cursorMode: string;
+  };
+};
+
 async function main() {
   if (!TOKEN) {
     console.error('Missing token. Set SOBA_TEST_TOKEN or pass --token=YOUR_TOKEN');
@@ -328,8 +405,109 @@ async function main() {
     console.log('  soba_admin:        no');
   }
   console.log('');
+
+  // Workspace-related API checks
+  const workspacesResult = await callAuthedJson(TOKEN, '/api/v1/workspaces?limit=50');
+  if (!workspacesResult.ok) {
+    const err =
+      workspacesResult.body &&
+      typeof workspacesResult.body === 'object' &&
+      'error' in workspacesResult.body
+        ? (workspacesResult.body as { error: string }).error
+        : workspacesResult.text || JSON.stringify(workspacesResult.body);
+    console.error('Workspaces API failed:', workspacesResult.status, err);
+    process.exit(1);
+  }
+  const workspacesBody = workspacesResult.body as WorkspaceListResponse;
+  const listedPersonal = Array.isArray(workspacesBody.items)
+    ? workspacesBody.items.find((w) => w.id === verify.personalWorkspace!.workspaceId)
+    : undefined;
+  if (!listedPersonal) {
+    console.error(
+      'Workspaces API verification failed: personal workspace not present in /api/v1/workspaces result',
+    );
+    process.exit(1);
+  }
   console.log(
-    'Done. Expected records are present (identity, user, personal workspace + owner group, admin status).',
+    'Workspaces API passed: listed personal workspace',
+    listedPersonal.name,
+    `(${listedPersonal.kind})`,
+    listedPersonal.id,
+  );
+
+  const currentWorkspaceResult = await callAuthedJson(TOKEN, '/api/v1/workspaces/current');
+  if (!currentWorkspaceResult.ok) {
+    const err =
+      currentWorkspaceResult.body &&
+      typeof currentWorkspaceResult.body === 'object' &&
+      'error' in currentWorkspaceResult.body
+        ? (currentWorkspaceResult.body as { error: string }).error
+        : currentWorkspaceResult.text || JSON.stringify(currentWorkspaceResult.body);
+    console.error('Current workspace API failed:', currentWorkspaceResult.status, err);
+    process.exit(1);
+  }
+  const currentWorkspace = currentWorkspaceResult.body as WorkspaceItem;
+  console.log(
+    'Current workspace API passed:',
+    currentWorkspace.name,
+    `(${currentWorkspace.kind})`,
+    currentWorkspace.id,
+  );
+
+  const membersResult = await callAuthedJson(TOKEN, '/api/v1/members?limit=100&status=active');
+  if (!membersResult.ok) {
+    const err =
+      membersResult.body && typeof membersResult.body === 'object' && 'error' in membersResult.body
+        ? (membersResult.body as { error: string }).error
+        : membersResult.text || JSON.stringify(membersResult.body);
+    console.error('Members API failed:', membersResult.status, err);
+    process.exit(1);
+  }
+  const membersBody = membersResult.body as MembersListResponse;
+  const hasSelfMember = Array.isArray(membersBody.items)
+    ? membersBody.items.some((m) => m.userId === verify.user!.id)
+    : false;
+  if (!hasSelfMember) {
+    console.error(
+      'Members API verification failed: signed-in user not found in current workspace members list',
+    );
+    process.exit(1);
+  }
+  console.log(
+    'Members API passed: user found in current workspace members list (active members:',
+    Array.isArray(membersBody.items) ? membersBody.items.length : 0,
+    ')',
+  );
+
+  // Admin API checks only if this user is already a SOBA admin.
+  if (verify.sobaAdmin) {
+    const adminsResult = await callAuthedJson(TOKEN, '/api/v1/admin/soba-admins?limit=100');
+    if (!adminsResult.ok) {
+      const err =
+        adminsResult.body && typeof adminsResult.body === 'object' && 'error' in adminsResult.body
+          ? (adminsResult.body as { error: string }).error
+          : adminsResult.text || JSON.stringify(adminsResult.body);
+      console.error('Admin API failed:', adminsResult.status, err);
+      process.exit(1);
+    }
+    const adminsBody = adminsResult.body as SobaAdminsListResponse;
+    const hasSelfAdmin = Array.isArray(adminsBody.items)
+      ? adminsBody.items.some((a) => a.userId === verify.user!.id)
+      : false;
+    if (!hasSelfAdmin) {
+      console.error(
+        'Admin API verification failed: user is in DB soba_admin table but missing from /api/v1/admin/soba-admins',
+      );
+      process.exit(1);
+    }
+    console.log('Admin API passed: user present in /api/v1/admin/soba-admins');
+  } else {
+    console.log('Admin API skipped: user is not a SOBA admin');
+  }
+  console.log('');
+
+  console.log(
+    'Done. Expected records are present and related APIs are verified (workspaces, current workspace, members, admin list when applicable).',
   );
 }
 
