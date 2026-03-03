@@ -7,6 +7,8 @@ import { metaDomain } from './meta';
 import { submissionsDomain } from './submissions';
 import { registerOpenApiPaths } from './shared/openapi';
 
+// Meta is mounted at app level at /api/v1/meta and is public (no JWT, no core context).
+// Only forms and submissions are mounted on this router; metaDomain is included here for OpenAPI registration only.
 const coreDomains = [formsDomain, metaDomain, submissionsDomain];
 
 const router = express.Router();

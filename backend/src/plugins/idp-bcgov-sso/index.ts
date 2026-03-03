@@ -24,6 +24,20 @@ const CLAIM_FIRST_NAME = ['given_name', 'given_names'] as const;
 const CLAIM_LAST_NAME = ['family_name'] as const;
 const CLAIM_USERNAME = ['idir_username', 'bceid_username', 'preferred_username', 'sub'] as const;
 
+/** Role code that indicates SOBA platform admin in IdP (e.g. Keycloak client role). */
+const SOBA_ADMIN_ROLE = 'soba_admin';
+
+function hasSobaAdminRole(decoded: Record<string, unknown>): boolean {
+  const roles = (decoded.roles as string[] | undefined) ?? [];
+  if (Array.isArray(roles) && roles.includes(SOBA_ADMIN_ROLE)) return true;
+  const realmAccess = decoded.realm_access as { roles?: string[] } | undefined;
+  if (realmAccess && Array.isArray(realmAccess.roles) && realmAccess.roles.includes(SOBA_ADMIN_ROLE))
+    return true;
+  const clientRoles = decoded.client_roles as string[] | undefined;
+  if (Array.isArray(clientRoles) && clientRoles.includes(SOBA_ADMIN_ROLE)) return true;
+  return false;
+}
+
 function normalizeProfile(decoded: Record<string, unknown>): NormalizedProfile {
   const displayName =
     firstString(decoded, CLAIM_DISPLAY_NAME) ||
@@ -103,6 +117,7 @@ class BcgovSsoClaimMapper implements IdpClaimMapper {
       providerCode: getProviderCode(payload),
       profile,
       idpAttributes,
+      sobaAdmin: hasSobaAdminRole(payload),
     };
   }
 }

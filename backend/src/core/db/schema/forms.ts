@@ -1,15 +1,6 @@
-import { v7 as uuidv7 } from 'uuid';
 import { index, text, timestamp, uniqueIndex, uuid, integer } from 'drizzle-orm/pg-core';
+import { auditColumns, idColumn, softDeleteColumns } from './audit';
 import { appUsers, sobaSchema, workspaces } from './core';
-
-const idColumn = () => uuid('id').primaryKey().$defaultFn(uuidv7);
-
-const strictAuditColumns = () => ({
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  createdBy: text('created_by'),
-  updatedBy: text('updated_by'),
-});
 
 export const forms = sobaSchema.table(
   'form',
@@ -23,9 +14,8 @@ export const forms = sobaSchema.table(
     name: text('name').notNull(),
     description: text('description'),
     status: text('status').notNull(),
-    ...strictAuditColumns(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    deletedBy: uuid('deleted_by').references(() => appUsers.id),
+    ...auditColumns(),
+    ...softDeleteColumns(),
   },
   (table) => ({
     workspaceSlugUnique: uniqueIndex('form_workspace_slug_uq').on(table.workspaceId, table.slug),
@@ -51,9 +41,8 @@ export const formVersions = sobaSchema.table(
     currentRevisionNo: integer('current_revision_no').notNull().default(0),
     publishedAt: timestamp('published_at', { withTimezone: true }),
     publishedBy: uuid('published_by').references(() => appUsers.id),
-    ...strictAuditColumns(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    deletedBy: uuid('deleted_by').references(() => appUsers.id),
+    ...auditColumns(),
+    ...softDeleteColumns(),
   },
   (table) => ({
     uniqueVersion: uniqueIndex('form_version_workspace_form_version_uq').on(
@@ -116,9 +105,8 @@ export const submissions = sobaSchema.table(
     engineSyncError: text('engine_sync_error'),
     currentRevisionNo: integer('current_revision_no').notNull().default(0),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
-    ...strictAuditColumns(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    deletedBy: uuid('deleted_by').references(() => appUsers.id),
+    ...auditColumns(),
+    ...softDeleteColumns(),
   },
   (table) => ({
     workspaceWorkflowIdx: index('submission_workspace_workflow_idx').on(

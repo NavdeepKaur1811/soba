@@ -1,7 +1,7 @@
 /**
  * Test sign-in flow: call the backend with a real IdP token, then verify that
  * the expected records exist in the database (identity_provider, app_user,
- * user_identity, and optionally workspace + workspace_membership).
+ * user_identity, personal workspace with user in owners group, and soba_admin if applicable).
  *
  * Usage:
  *   # GitHub (token from gh auth token or a PAT)
@@ -21,10 +21,14 @@
 import { and, eq } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 import { db } from '../src/core/db/client';
+import { Roles } from '../src/core/db/codes';
 import {
   appUsers,
   identityProviders,
+  sobaAdmins,
   userIdentities,
+  workspaceGroupMemberships,
+  workspaceGroups,
   workspaceMemberships,
   workspaces,
 } from '../src/core/db/schema';
@@ -94,7 +98,9 @@ function getExpectedFromBcgovJwt(token: string): {
   return { subject, providerCode, displayLabel: displayLabel as string };
 }
 
-async function callSignIn(token: string): Promise<{ ok: boolean; status: number; body: unknown }> {
+async function callSignIn(
+  token: string,
+): Promise<{ ok: boolean; status: number; body: unknown; text: string }> {
   const res = await fetch(`${API_BASE}/api/v1/forms`, {
     method: 'GET',
     headers: {
@@ -102,8 +108,15 @@ async function callSignIn(token: string): Promise<{ ok: boolean; status: number;
       Authorization: `Bearer ${token}`,
     },
   });
-  const body = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, body };
+  const text = await res.text();
+  const body = (() => {
+    try {
+      return text ? (JSON.parse(text) as unknown) : {};
+    } catch {
+      return { raw: text };
+    }
+  })();
+  return { ok: res.ok, status: res.status, body, text };
 }
 
 async function verifyDbRecords(
@@ -154,24 +167,72 @@ async function verifyDbRecords(
     };
   }
 
-  // Optional: check that a personal workspace exists for this user
-  const membershipRow = await db
+  // Require personal workspace with user in owners group (ensureHomeWorkspace creates these on first sign-in)
+  const personalWithOwnerGroup = await db
     .select({
       workspaceId: workspaces.id,
       workspaceName: workspaces.name,
       kind: workspaces.kind,
+      membershipId: workspaceMemberships.id,
+      membershipRole: workspaceMemberships.role,
+      membershipSource: workspaceMemberships.source,
+      ownersGroupId: workspaceGroups.id,
+      ownersGroupName: workspaceGroups.name,
     })
     .from(workspaceMemberships)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMemberships.workspaceId))
-    .where(and(eq(workspaceMemberships.userId, user.id), eq(workspaceMemberships.status, 'active')))
+    .innerJoin(
+      workspaceGroupMemberships,
+      and(
+        eq(workspaceGroupMemberships.workspaceMembershipId, workspaceMemberships.id),
+        eq(workspaceGroupMemberships.workspaceId, workspaces.id),
+      ),
+    )
+    .innerJoin(
+      workspaceGroups,
+      and(
+        eq(workspaceGroups.id, workspaceGroupMemberships.groupId),
+        eq(workspaceGroups.workspaceId, workspaces.id),
+        eq(workspaceGroups.roleCode, Roles.workspace_owner),
+      ),
+    )
+    .where(
+      and(
+        eq(workspaceMemberships.userId, user.id),
+        eq(workspaceMemberships.status, 'active'),
+        eq(workspaces.kind, 'personal'),
+        eq(workspaceGroupMemberships.status, 'active'),
+      ),
+    )
     .limit(5);
+
+  if (personalWithOwnerGroup.length === 0) {
+    return {
+      ok: false,
+      message:
+        'Missing personal workspace with user in owners group (ensureHomeWorkspace should create these on first sign-in)',
+    };
+  }
+
+  // SOBA admin: optional; report if user is in soba_admin table
+  const adminRow = await db
+    .select({
+      userId: sobaAdmins.userId,
+      source: sobaAdmins.source,
+      identityProviderCode: sobaAdmins.identityProviderCode,
+    })
+    .from(sobaAdmins)
+    .where(eq(sobaAdmins.userId, user.id))
+    .limit(1);
+  const sobaAdmin = adminRow[0] ?? null;
 
   return {
     ok: true,
     provider,
     identity,
     user,
-    workspaces: membershipRow,
+    personalWorkspace: personalWithOwnerGroup[0],
+    sobaAdmin,
   };
 }
 
@@ -203,7 +264,16 @@ async function main() {
 
   const signInResult = await callSignIn(TOKEN);
   if (!signInResult.ok) {
-    console.error('Sign-in request failed:', signInResult.status, signInResult.body);
+    const errBody =
+      signInResult.body && typeof signInResult.body === 'object' && 'error' in signInResult.body
+        ? (signInResult.body as { error: string }).error
+        : signInResult.text || JSON.stringify(signInResult.body);
+    console.error('Sign-in request failed:', signInResult.status, errBody);
+    if (signInResult.status === 500) {
+      console.error(
+        'Tip: ensure migrations are applied (npm run db:migrate) and seed run (npm run db:seed); soba_admin and role tables must exist.',
+      );
+    }
     process.exit(1);
   }
   console.log('Sign-in request succeeded (HTTP', signInResult.status, ')');
@@ -233,14 +303,34 @@ async function main() {
     ', display_label=',
     verify.user!.displayLabel,
   );
-  if (verify.workspaces && verify.workspaces.length > 0) {
-    console.log('  workspaces:        ', verify.workspaces.length, 'membership(s)');
-    verify.workspaces.forEach((w) =>
-      console.log('    -', w.workspaceName, `(${w.kind})`, w.workspaceId),
-    );
+  const pw = verify.personalWorkspace!;
+  console.log('  personal workspace:', pw.workspaceName, `(${pw.kind})`, pw.workspaceId);
+  console.log(
+    '    membership:     role=',
+    pw.membershipRole,
+    ', source=',
+    pw.membershipSource,
+    ', id=',
+    pw.membershipId,
+  );
+  console.log(
+    '    owners group:   ',
+    pw.ownersGroupName,
+    '(role_code=workspace_owner)',
+    pw.ownersGroupId,
+  );
+  if (verify.sobaAdmin) {
+    const idpPart = verify.sobaAdmin.identityProviderCode
+      ? `, idp=${verify.sobaAdmin.identityProviderCode}`
+      : '';
+    console.log('  soba_admin:        yes (source=', verify.sobaAdmin.source, idpPart, ')');
+  } else {
+    console.log('  soba_admin:        no');
   }
   console.log('');
-  console.log('Done. Expected records are present.');
+  console.log(
+    'Done. Expected records are present (identity, user, personal workspace + owner group, admin status).',
+  );
 }
 
 main().catch((err) => {

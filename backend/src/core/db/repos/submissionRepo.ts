@@ -224,7 +224,7 @@ export const markSubmissionDeleted = async (
     .set({
       workflowState: 'deleted',
       deletedAt: new Date(),
-      deletedBy: actorId,
+      deletedBy: actorDisplayLabel,
       updatedBy: actorDisplayLabel,
       updatedAt: new Date(),
     })

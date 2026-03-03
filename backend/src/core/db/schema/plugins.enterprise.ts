@@ -1,15 +1,6 @@
-import { v7 as uuidv7 } from 'uuid';
 import { index, jsonb, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { auditColumns, idColumn } from './audit';
 import { sobaSchema, workspaceGroups, workspaceMemberships, workspaces } from './core';
-
-const idColumn = () => uuid('id').primaryKey().$defaultFn(uuidv7);
-
-const auditColumns = () => ({
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  createdBy: text('created_by'),
-  updatedBy: text('updated_by'),
-});
 
 export const enterpriseWorkspaceBindings = sobaSchema.table(
   'enterprise_workspace_binding',

@@ -20,21 +20,20 @@ export const PluginsMetaResponseSchema = z
   })
   .openapi('Meta_PluginsResponse');
 
+export const FeatureMetaSchema = z
+  .object({
+    code: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    version: z.string().nullable(),
+    status: z.string(),
+    enabled: z.boolean(),
+  })
+  .openapi('Meta_Feature');
+
 export const FeaturesMetaResponseSchema = z
   .object({
-    coreFeatures: z.array(z.string()),
-    pluginFeatures: z.array(
-      z
-        .object({
-          code: z.string(),
-          apiBasePath: z.string(),
-          enabled: z.boolean(),
-        })
-        .openapi('Meta_PluginFeature'),
-    ),
-    activeCache: z.object({ code: z.string() }).openapi('Meta_ActiveCache'),
-    activeMessageBus: z.object({ code: z.string() }).openapi('Meta_ActiveMessageBus'),
-    activeFormEngine: z.object({ code: z.string() }).openapi('Meta_ActiveFormEngine'),
+    features: z.array(FeatureMetaSchema),
   })
   .openapi('Meta_FeaturesResponse');
 
@@ -48,6 +47,35 @@ export const BuildMetaResponseSchema = z
     imageTag: z.string(),
   })
   .openapi('Meta_BuildResponse');
+
+export const CodeSetMetaSchema = z
+  .object({
+    codeSet: z.string(),
+    providerType: z.string(),
+    featureCode: z.string().nullable(),
+  })
+  .openapi('Meta_CodeSet');
+
+export const CodeSetsMetaResponseSchema = z
+  .object({
+    codeSets: z.array(CodeSetMetaSchema),
+  })
+  .openapi('Meta_CodeSetsResponse');
+
+export const CodeRowMetaSchema = z
+  .object({
+    code: z.string(),
+    display: z.string(),
+    sort_order: z.number(),
+    is_active: z.boolean(),
+  })
+  .openapi('Meta_CodeRow');
+
+export const CodesMetaResponseSchema = z
+  .object({
+    items: z.array(CodeRowMetaSchema),
+  })
+  .openapi('Meta_CodesResponse');
 
 export const FormEngineMetaSchema = z
   .object({
@@ -90,7 +118,7 @@ export const registerMetaOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.meta'],
     responses: {
       200: {
-        description: 'Core and plugin feature catalog',
+        description: 'DB-backed feature list (code, name, status, enabled)',
         content: {
           'application/json': {
             schema: FeaturesMetaResponseSchema,
@@ -129,6 +157,41 @@ export const registerMetaOpenApi = (registry: OpenAPIRegistry) => {
           },
         },
       },
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/meta/codes',
+    tags: ['core.meta'],
+    responses: {
+      200: {
+        description:
+          'Registered code sets. Query: only_enabled_features=true to exclude feature-owned sets whose feature is not enabled.',
+        content: {
+          'application/json': {
+            schema: CodeSetsMetaResponseSchema,
+          },
+        },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/meta/codes/{codeSet}',
+    tags: ['core.meta'],
+    responses: {
+      200: {
+        description:
+          'Codes for the given code set. Query: active_only=true. 404 if code set not in registry or feature not enabled.',
+        content: {
+          'application/json': {
+            schema: CodesMetaResponseSchema,
+          },
+        },
+      },
+      404: { description: 'Code set not found or feature not enabled' },
     },
   });
 };

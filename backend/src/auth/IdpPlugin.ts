@@ -13,6 +13,11 @@ export interface IdpMapPayloadResult {
   providerCode: string;
   profile: NormalizedProfile;
   idpAttributes: IdpAttributes;
+  /**
+   * If true, the IdP indicates this user is a SOBA platform admin (e.g. role: soba_admin).
+   * Used to refresh soba_admin table on login. Omit or false when IdP does not convey admin.
+   */
+  sobaAdmin?: boolean;
 }
 
 /** Per-request claim mapper: token payload → common user shape. Provided by each IdP plugin. */

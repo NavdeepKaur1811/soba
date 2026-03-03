@@ -1,29 +1,15 @@
-import { v7 as uuidv7 } from 'uuid';
-import {
-  boolean,
-  index,
-  jsonb,
-  pgSchema,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-export const sobaSchema = pgSchema('soba');
+import { auditColumns, idColumn } from './audit';
+import { sobaSchema } from './sobaSchema';
+import { roles } from './roles';
 
-const idColumn = () => uuid('id').primaryKey().$defaultFn(uuidv7);
-
-const auditColumns = () => ({
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  createdBy: text('created_by'),
-  updatedBy: text('updated_by'),
-});
+export { sobaSchema };
 
 export const identityProviders = sobaSchema.table('identity_provider', {
   code: text('code').primaryKey(),
   name: text('name').notNull(),
+  hint: text('hint').notNull().default('code'),
   isActive: boolean('is_active').notNull().default(true),
   ...auditColumns(),
 });
@@ -72,6 +58,30 @@ export const userIdentities = sobaSchema.table(
   }),
 );
 
+/**
+ * SOBA platform admins (super powers, cross-workspace tasks).
+ * One row per user; source is either 'idp' (refreshed on login from IdP claims) or 'direct' (manually added).
+ * IdP-sourced rows are refreshed on each login: if the IdP no longer reports admin, the row is removed.
+ */
+export const sobaAdmins = sobaSchema.table(
+  'soba_admin',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => appUsers.id),
+    /** 'idp' = granted from IdP on login (e.g. role: soba_admin); 'direct' = manually added. */
+    source: text('source').notNull(),
+    /** When source='idp', which IdP plugin granted admin (plugin code, e.g. bcgov-sso); used for refresh/revoke on login. Not an FK so plugin code is not required in identity_provider (token provider may be azureidir/idir etc.). */
+    identityProviderCode: text('identity_provider_code'),
+    /** When source='idp', last time we synced this row from IdP. */
+    syncedAt: timestamp('synced_at', { withTimezone: true }),
+    ...auditColumns(),
+  },
+  (table) => ({
+    idpIdx: index('soba_admin_identity_provider_idx').on(table.identityProviderCode),
+  }),
+);
+
 export const workspaces = sobaSchema.table(
   'workspace',
   {
@@ -80,12 +90,12 @@ export const workspaces = sobaSchema.table(
     name: text('name').notNull(),
     slug: text('slug'),
     status: text('status').notNull(),
-    ownerUserId: uuid('owner_user_id').references(() => appUsers.id),
+    parentWorkspaceId: uuid('parent_workspace_id').references(() => workspaces.id),
     ...auditColumns(),
   },
   (table) => ({
     slugUnique: uniqueIndex('workspace_slug_uq').on(table.slug),
-    ownerIdx: index('workspace_owner_idx').on(table.ownerUserId),
+    parentIdx: index('workspace_parent_idx').on(table.parentWorkspaceId),
   }),
 );
 
@@ -129,6 +139,7 @@ export const workspaceGroups = sobaSchema.table(
     name: text('name').notNull(),
     description: text('description'),
     status: text('status').notNull(),
+    roleCode: text('role_code').references(() => roles.code),
     ...auditColumns(),
   },
   (table) => ({

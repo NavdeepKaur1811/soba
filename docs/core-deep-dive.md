@@ -14,7 +14,7 @@ Detailed walkthrough of core layers, request flow, schema organization, repos, a
 
 We support two deployment/usage modes, reflected in **workspace kind** (`personal` | `enterprise`) and in which **plugins** are enabled:
 
-- **Personal (local)** — Standalone or local use. Users have a “home” workspace; workspace context can come from cookie or header (unknown how to implement). Invites, per-workspace settings, and audit are handled by the **personal** plugin (tables: `personal_workspace_settings`, `personal_invite`, `personal_audit`). No external identity or workspace provider.
+- **Personal (local)** — Standalone or local use. Users have a “home” workspace; workspace context can come from cookie or header. No external identity or workspace provider. (Per-workspace settings, invites, or audit can be added later if needed.)
 - **Enterprise (e.g. cstar)** — Integrated with an external identity/workspace provider. Workspace context is resolved from provider headers ( or JWT?); workspace, membership, and group records in Soba are **bound** to the provider’s entities via the **enterprise** plugin (tables: `enterprise_workspace_binding`, `enterprise_membership_binding`, `enterprise_group_binding`, plus sync cursors and logs). Sync jobs and bindings keep Soba aligned with the external system. Or on demand (login) per user sync.
 
 So: **personal** = local, self-service workspaces; **enterprise** = provider-backed workspaces (e.g. C-Star) with bindings and sync.
@@ -67,13 +67,13 @@ Features are the right place for product-specific behaviour that builds on core;
 - **Location:** `backend/src/core/api/`
 - **Domains:** Forms, submissions, meta. Each domain has a router, controller(s), service factory, and OpenAPI registration.
 - **Shared:** `shared/openapi.ts`, `shared/pagination.ts`, `shared/asyncHandler.ts`, `shared/types.ts`
-- **Mounting:** In `app.ts`, core is mounted at `/api/v1` with `express.json()` and JWT middleware. Meta is public; forms and submissions require a valid JWT and core context (workspace/membership).
+- **Mounting:** In `app.ts`, **meta** is public and mounted separately at `/api/v1/meta` (no JWT, no core context). **Forms and submissions** are mounted on the core router at `/api/v1` with `express.json()`, JWT, actor resolution, and core context (workspace/membership).
 
 ### Auth
 
 - **Location:** `backend/src/core/auth/` (profile helpers); auth middleware and IdP plugin discovery live in `backend/src/auth/` and `backend/src/middleware/` so core does not depend on plugin implementations.
 - **IdP (auth source) plugins:** Token validation and claim mapping are provided by **IdP plugins**, not by core. The contract is in `auth/IdpPlugin.ts` (`IdpPluginDefinition`: code, `createAuthMiddleware(config)`, `createClaimMapper(config)`). Discovery and composite middleware are in `auth/idpRegistry.ts`; plugins export `idpPluginDefinition` from `backend/src/plugins/` (e.g. `idp-bcgov-sso`, `idp-github`). Config: `IDP_PLUGINS` (comma-separated, ordered list) or `IDP_PLUGIN_DEFAULT_CODE`. The composite auth middleware tries each IdP plugin in order; the first to succeed sets `req.idpPluginCode` and `req.authPayload`.
-- **Actor resolution:** After auth, `middleware/actor.ts` uses the active plugin’s `claimMapper.mapPayload(payload)` and `findOrCreateUserByIdentity(providerCode, subject, profile, idpAttributes)` to set `req.actorId`. **Workspace and membership are not in the token** — they are resolved by **workspace resolver plugins** and `membershipRepo` in `resolveCoreContext` (request context).
+- **Actor resolution:** After auth, `middleware/actor.ts` uses the active plugin’s `claimMapper.mapPayload(payload)` and `findOrCreateUserByIdentity(providerCode, subject, profile, idpAttributes)` to set `req.actorId`. If the mapper returns `sobaAdmin: true/false`, the actor middleware refreshes the `soba_admin` table (idp-sourced grant or revoke) and then sets `req.isSobaAdmin` from the table. **Workspace and membership are not in the token** — they are resolved by **workspace resolver plugins** and `membershipRepo` in `resolveCoreContext` (request context).
 - **jwtClaims:** Core’s `core/auth/jwtClaims.ts` defines profile shape and helpers (`NormalizedProfile`, `profileHelpers` for displayLabel, displayName, email, etc.). IdP plugins populate these when mapping; core does not parse IdP-specific claims.
 
 **Request auth and context flow:** IdP (auth source) plugins validate the JWT and set `req.idpPluginCode` and `req.authPayload`; actor middleware uses the plugin’s claim mapper and `findOrCreateUserByIdentity` to set `req.actorId`; core request context then resolves workspace and membership via workspace resolver plugins and DB.
@@ -111,7 +111,7 @@ sequenceDiagram
 - **Location:** `backend/src/core/db/`
 - **Client:** `client.ts` — creates a `pg` Pool from env, then `drizzle(pool, { schema, logger: drizzleQueryLogger })`. Exports `db`, `Db`, `Tx`, `DbOrTx`, `pool`.
 - **Schema:** Re-exported from `schema/index.ts` (core, forms, integration, plugins). All tables live in the Postgres schema `soba`.
-- **Repos:** One or more modules per domain (formRepo, formVersionRepo, submissionRepo, workspaceRepo, membershipRepo, outboxRepo, appUserRepo; plugin repos under `repos/plugins/`).
+- **Repos:** One or more modules per domain (formRepo, formVersionRepo, submissionRepo, workspaceRepo, membershipRepo, outboxRepo, appUserRepo, sobaAdminRepo; plugin repos under `repos/plugins/`).
 - **Migrations:** `migrate.ts` ensures the database exists (optional admin connection), then runs `migrate(db, { migrationsFolder: 'drizzle' })`. Migrations are generated into `backend/drizzle/` by drizzle-kit.
 - **Seed:** `seed.ts` for initial data (e.g. identity provider, dev users).
 - **Extras:** `appUserView.ts` (view/helpers for app user display), `queryLogger.ts` (Drizzle logger for dev/debug).
@@ -134,6 +134,7 @@ sequenceDiagram
 - **Request context:** Sets up core context (e.g. workspace, user) for the request.
 - **Error handler:** Core API error handler (maps domain errors to HTTP status and body).
 - **Require core context:** Ensures core context is present before forms/submissions routes run.
+- **Require SOBA admin:** `requireSobaAdmin` ensures `req.isSobaAdmin === true`; use for admin-only routes (e.g. platform config, cross-workspace operations).
 
 ### Services
 
@@ -192,7 +193,6 @@ Later, the outbox worker claims the row, calls the form-engine handler (e.g. pro
   - `core.ts` — identity_provider, app_user, user_identity, workspace, workspace_membership, workspace_group, workspace_group_membership
   - `forms.ts` — form, form_version, form_version_revision, submission, submission_revision
   - `integration.ts` — integration_outbox
-  - `plugins.personal.ts` — personal_workspace_settings, personal_invite, personal_audit
   - `plugins.enterprise.ts` — enterprise_workspace_binding, enterprise_membership_binding, enterprise_group_binding, enterprise_sync_cursor, enterprise_sync_log
 - **Forms and submissions: no resource-level roles or permissions.** We have not modelled roles or permissions on forms or submissions. Access is currently implied by workspace membership (and, in enterprise, by groups). Fine-grained access (e.g. per-form or per-submission roles such as viewer/editor, or permission flags) can be added later if needed.
 - **Types:** `types.ts` defines canonical status/state unions (`FormStatus`, `FormVersionState`, `FormVersionEngineSyncStatus`, `OutboxStatus`, `WorkspaceMembershipStatus`, `WorkspaceMembershipRole`) used in schema and API. DB can enforce these via CHECK constraints.
@@ -210,7 +210,6 @@ Later, the outbox worker claims the row, calls the form-engine handler (e.g. pro
 | `membershipRepo`                      | Resolve user from identity, find/create user by identity, actorBelongsToWorkspace, getWorkspaceForUser, invalidate cache, list workspaces for user |
 | `outboxRepo`                          | enqueueOutboxEvent, claimOutboxBatch, markOutboxSucceeded, markOutboxFailed                                                                        |
 | `appUserRepo`                         | findUserIdByEmail (and related app user lookups)                                                                                                   |
-| `repos/plugins/personalSettingsRepo`  | getPersonalWorkspaceSettings                                                                                                                       |
 | `repos/plugins/enterpriseBindingRepo` | findWorkspaceByEnterpriseExternalId and related enterprise bindings                                                                                |
 
 Repos accept optional `DbOrTx` for use inside `db.transaction()`.

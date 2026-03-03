@@ -14,7 +14,19 @@ CREATE TABLE "soba"."app_user" (
 CREATE TABLE "soba"."identity_provider" (
 	"code" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
+	"hint" text DEFAULT 'code' NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_by" text,
+	"updated_by" text
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."soba_admin" (
+	"user_id" uuid PRIMARY KEY NOT NULL,
+	"source" text NOT NULL,
+	"identity_provider_code" text,
+	"synced_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_by" text,
@@ -53,6 +65,7 @@ CREATE TABLE "soba"."workspace_group" (
 	"name" text NOT NULL,
 	"description" text,
 	"status" text NOT NULL,
+	"role_code" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_by" text,
@@ -82,11 +95,97 @@ CREATE TABLE "soba"."workspace" (
 	"name" text NOT NULL,
 	"slug" text,
 	"status" text NOT NULL,
-	"owner_user_id" uuid,
+	"parent_workspace_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_by" text,
 	"updated_by" text
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."feature_status" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."feature" (
+	"code" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"description" text,
+	"version" text,
+	"status" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_by" text,
+	"updated_by" text
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."role_registry" (
+	"role_code" text PRIMARY KEY NOT NULL,
+	"provider_type" text NOT NULL,
+	"feature_code" text,
+	CONSTRAINT "role_registry_core_feature_check" CHECK ((("soba"."role_registry"."provider_type" = 'core' AND "soba"."role_registry"."feature_code" IS NULL) OR ("soba"."role_registry"."provider_type" = 'feature' AND "soba"."role_registry"."feature_code" IS NOT NULL)))
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."role_status" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."role" (
+	"code" text PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"description" text,
+	"status" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_by" text,
+	"updated_by" text
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."code_set_registry" (
+	"code_set" text PRIMARY KEY NOT NULL,
+	"provider_type" text NOT NULL,
+	"feature_code" text,
+	CONSTRAINT "code_set_registry_core_feature_check" CHECK ((("soba"."code_set_registry"."provider_type" = 'core' AND "soba"."code_set_registry"."feature_code" IS NULL) OR ("soba"."code_set_registry"."provider_type" = 'feature' AND "soba"."code_set_registry"."feature_code" IS NOT NULL)))
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."form_status" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."form_version_state" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."outbox_status" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."workspace_membership_role" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "soba"."workspace_membership_status" (
+	"code" text PRIMARY KEY NOT NULL,
+	"display" text NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."form_version_revision" (
@@ -119,7 +218,7 @@ CREATE TABLE "soba"."form_version" (
 	"created_by" text,
 	"updated_by" text,
 	"deleted_at" timestamp with time zone,
-	"deleted_by" uuid
+	"deleted_by" text
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."form" (
@@ -135,7 +234,7 @@ CREATE TABLE "soba"."form" (
 	"created_by" text,
 	"updated_by" text,
 	"deleted_at" timestamp with time zone,
-	"deleted_by" uuid
+	"deleted_by" text
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."submission_revision" (
@@ -168,7 +267,7 @@ CREATE TABLE "soba"."submission" (
 	"created_by" text,
 	"updated_by" text,
 	"deleted_at" timestamp with time zone,
-	"deleted_by" uuid
+	"deleted_by" text
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."integration_outbox" (
@@ -258,65 +357,28 @@ CREATE TABLE "soba"."enterprise_workspace_binding" (
 	"updated_by" text
 );
 --> statement-breakpoint
-CREATE TABLE "soba"."personal_audit" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"workspace_id" uuid NOT NULL,
-	"actor_user_id" uuid NOT NULL,
-	"event_type" text NOT NULL,
-	"payload" jsonb,
-	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"created_by" text,
-	"updated_by" text
-);
---> statement-breakpoint
-CREATE TABLE "soba"."personal_invite" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"workspace_id" uuid NOT NULL,
-	"invitee_email" text NOT NULL,
-	"invited_by_user_id" uuid NOT NULL,
-	"accepted_by_user_id" uuid,
-	"invite_token_hash" text NOT NULL,
-	"status" text NOT NULL,
-	"expires_at" timestamp with time zone NOT NULL,
-	"accepted_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"created_by" text,
-	"updated_by" text
-);
---> statement-breakpoint
-CREATE TABLE "soba"."personal_workspace_settings" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"workspace_id" uuid NOT NULL,
-	"default_landing_path" text,
-	"preferences" jsonb,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"created_by" text,
-	"updated_by" text
-);
---> statement-breakpoint
+ALTER TABLE "soba"."soba_admin" ADD CONSTRAINT "soba_admin_user_id_app_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."user_identity" ADD CONSTRAINT "user_identity_user_id_app_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."user_identity" ADD CONSTRAINT "user_identity_identity_provider_code_identity_provider_code_fk" FOREIGN KEY ("identity_provider_code") REFERENCES "soba"."identity_provider"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_group_membership" ADD CONSTRAINT "workspace_group_membership_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_group_membership" ADD CONSTRAINT "workspace_group_membership_workspace_membership_id_workspace_membership_id_fk" FOREIGN KEY ("workspace_membership_id") REFERENCES "soba"."workspace_membership"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_group_membership" ADD CONSTRAINT "workspace_group_membership_group_id_workspace_group_id_fk" FOREIGN KEY ("group_id") REFERENCES "soba"."workspace_group"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_group" ADD CONSTRAINT "workspace_group_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "soba"."workspace_group" ADD CONSTRAINT "workspace_group_role_code_role_code_fk" FOREIGN KEY ("role_code") REFERENCES "soba"."role"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_membership" ADD CONSTRAINT "workspace_membership_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_membership" ADD CONSTRAINT "workspace_membership_user_id_app_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_membership" ADD CONSTRAINT "workspace_membership_invited_by_user_id_app_user_id_fk" FOREIGN KEY ("invited_by_user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."workspace" ADD CONSTRAINT "workspace_owner_user_id_app_user_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "soba"."workspace" ADD CONSTRAINT "workspace_parent_workspace_id_workspace_id_fk" FOREIGN KEY ("parent_workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "soba"."role_registry" ADD CONSTRAINT "role_registry_role_code_role_code_fk" FOREIGN KEY ("role_code") REFERENCES "soba"."role"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "soba"."role_registry" ADD CONSTRAINT "role_registry_feature_code_feature_code_fk" FOREIGN KEY ("feature_code") REFERENCES "soba"."feature"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "soba"."code_set_registry" ADD CONSTRAINT "code_set_registry_feature_code_feature_code_fk" FOREIGN KEY ("feature_code") REFERENCES "soba"."feature"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version_revision" ADD CONSTRAINT "form_version_revision_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version_revision" ADD CONSTRAINT "form_version_revision_form_version_id_form_version_id_fk" FOREIGN KEY ("form_version_id") REFERENCES "soba"."form_version"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version_revision" ADD CONSTRAINT "form_version_revision_changed_by_app_user_id_fk" FOREIGN KEY ("changed_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version" ADD CONSTRAINT "form_version_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version" ADD CONSTRAINT "form_version_form_id_form_id_fk" FOREIGN KEY ("form_id") REFERENCES "soba"."form"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version" ADD CONSTRAINT "form_version_published_by_app_user_id_fk" FOREIGN KEY ("published_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."form_version" ADD CONSTRAINT "form_version_deleted_by_app_user_id_fk" FOREIGN KEY ("deleted_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form" ADD CONSTRAINT "form_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."form" ADD CONSTRAINT "form_deleted_by_app_user_id_fk" FOREIGN KEY ("deleted_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."submission_revision" ADD CONSTRAINT "submission_revision_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."submission_revision" ADD CONSTRAINT "submission_revision_submission_id_submission_id_fk" FOREIGN KEY ("submission_id") REFERENCES "soba"."submission"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."submission_revision" ADD CONSTRAINT "submission_revision_changed_by_app_user_id_fk" FOREIGN KEY ("changed_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -324,7 +386,6 @@ ALTER TABLE "soba"."submission" ADD CONSTRAINT "submission_workspace_id_workspac
 ALTER TABLE "soba"."submission" ADD CONSTRAINT "submission_form_id_form_id_fk" FOREIGN KEY ("form_id") REFERENCES "soba"."form"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."submission" ADD CONSTRAINT "submission_form_version_id_form_version_id_fk" FOREIGN KEY ("form_version_id") REFERENCES "soba"."form_version"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."submission" ADD CONSTRAINT "submission_submitted_by_app_user_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."submission" ADD CONSTRAINT "submission_deleted_by_app_user_id_fk" FOREIGN KEY ("deleted_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."integration_outbox" ADD CONSTRAINT "integration_outbox_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."enterprise_group_binding" ADD CONSTRAINT "enterprise_group_binding_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."enterprise_group_binding" ADD CONSTRAINT "enterprise_group_binding_workspace_group_id_workspace_group_id_fk" FOREIGN KEY ("workspace_group_id") REFERENCES "soba"."workspace_group"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -333,12 +394,7 @@ ALTER TABLE "soba"."enterprise_membership_binding" ADD CONSTRAINT "enterprise_me
 ALTER TABLE "soba"."enterprise_sync_cursor" ADD CONSTRAINT "enterprise_sync_cursor_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."enterprise_sync_log" ADD CONSTRAINT "enterprise_sync_log_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."enterprise_workspace_binding" ADD CONSTRAINT "enterprise_workspace_binding_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."personal_audit" ADD CONSTRAINT "personal_audit_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."personal_audit" ADD CONSTRAINT "personal_audit_actor_user_id_app_user_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."personal_invite" ADD CONSTRAINT "personal_invite_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."personal_invite" ADD CONSTRAINT "personal_invite_invited_by_user_id_app_user_id_fk" FOREIGN KEY ("invited_by_user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."personal_invite" ADD CONSTRAINT "personal_invite_accepted_by_user_id_app_user_id_fk" FOREIGN KEY ("accepted_by_user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."personal_workspace_settings" ADD CONSTRAINT "personal_workspace_settings_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "soba_admin_identity_provider_idx" ON "soba"."soba_admin" USING btree ("identity_provider_code");--> statement-breakpoint
 CREATE UNIQUE INDEX "user_identity_provider_subject_uq" ON "soba"."user_identity" USING btree ("identity_provider_code","subject");--> statement-breakpoint
 CREATE UNIQUE INDEX "user_identity_user_provider_uq" ON "soba"."user_identity" USING btree ("user_id","identity_provider_code");--> statement-breakpoint
 CREATE INDEX "user_identity_user_idx" ON "soba"."user_identity" USING btree ("user_id");--> statement-breakpoint
@@ -353,7 +409,7 @@ CREATE UNIQUE INDEX "workspace_membership_workspace_user_uq" ON "soba"."workspac
 CREATE INDEX "workspace_membership_workspace_idx" ON "soba"."workspace_membership" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "workspace_membership_user_idx" ON "soba"."workspace_membership" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "workspace_slug_uq" ON "soba"."workspace" USING btree ("slug");--> statement-breakpoint
-CREATE INDEX "workspace_owner_idx" ON "soba"."workspace" USING btree ("owner_user_id");--> statement-breakpoint
+CREATE INDEX "workspace_parent_idx" ON "soba"."workspace" USING btree ("parent_workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "form_version_revision_workspace_form_version_revision_uq" ON "soba"."form_version_revision" USING btree ("workspace_id","form_version_id","revision_no");--> statement-breakpoint
 CREATE INDEX "form_version_revision_workspace_idx" ON "soba"."form_version_revision" USING btree ("workspace_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "form_version_workspace_form_version_uq" ON "soba"."form_version" USING btree ("workspace_id","form_id","version_no");--> statement-breakpoint
@@ -377,8 +433,4 @@ CREATE UNIQUE INDEX "enterprise_membership_binding_workspace_identity_uq" ON "so
 CREATE UNIQUE INDEX "enterprise_sync_cursor_workspace_cursor_uq" ON "soba"."enterprise_sync_cursor" USING btree ("workspace_id","provider_code","cursor_key");--> statement-breakpoint
 CREATE INDEX "enterprise_sync_log_workspace_started_idx" ON "soba"."enterprise_sync_log" USING btree ("workspace_id","started_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "enterprise_workspace_binding_provider_external_uq" ON "soba"."enterprise_workspace_binding" USING btree ("provider_code","external_workspace_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "enterprise_workspace_binding_workspace_provider_uq" ON "soba"."enterprise_workspace_binding" USING btree ("workspace_id","provider_code");--> statement-breakpoint
-CREATE INDEX "personal_audit_workspace_occurred_idx" ON "soba"."personal_audit" USING btree ("workspace_id","occurred_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "personal_invite_token_uq" ON "soba"."personal_invite" USING btree ("invite_token_hash");--> statement-breakpoint
-CREATE INDEX "personal_invite_workspace_invitee_status_idx" ON "soba"."personal_invite" USING btree ("workspace_id","invitee_email","status");--> statement-breakpoint
-CREATE UNIQUE INDEX "personal_workspace_settings_workspace_uq" ON "soba"."personal_workspace_settings" USING btree ("workspace_id");
+CREATE UNIQUE INDEX "enterprise_workspace_binding_workspace_provider_uq" ON "soba"."enterprise_workspace_binding" USING btree ("workspace_id","provider_code");

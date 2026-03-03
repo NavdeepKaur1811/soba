@@ -19,6 +19,8 @@ declare module 'express-serve-static-core' {
     coreContext?: CoreRequestContext;
     /** Resolved app_user id; set by auth/actor middleware before core context. */
     actorId?: string;
+    /** True when the actor is a SOBA platform admin (soba_admin table); set by actor middleware. */
+    isSobaAdmin?: boolean;
   }
 }
 

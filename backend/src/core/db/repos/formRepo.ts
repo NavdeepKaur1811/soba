@@ -179,7 +179,7 @@ export const markFormDeleted = async (
     .set({
       status: 'deleted',
       deletedAt: new Date(),
-      deletedBy: actorId,
+      deletedBy: actorDisplayLabel,
       updatedBy: actorDisplayLabel,
       updatedAt: new Date(),
     })

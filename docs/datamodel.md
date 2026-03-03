@@ -8,10 +8,10 @@ All tables live in the Postgres schema **soba**.
 
 - **Multi-tenancy:** Soba is designed to be multi-tenant. We achieve tenant isolation by **siloing all data access and queries by `workspace_id`**. Every tenant-scoped table has a `workspace_id` column; every API and repo query that touches tenant data is scoped to the workspace resolved for the request. There are no cross-workspace reads or writes. See [Core overview](core-overview.md) and [Core deep dive](core-deep-dive.md) for how workspace resolution and scoping work.
 
-- **Core:** Identity providers (keyed by `code`) and app users; `user_identity` links users to IdPs via `identity_provider_code` (subject, idp_attributes). Workspaces have an optional owner (`app_user`); `workspace_membership` links users to workspaces (role, status, invite/accept, last_synced_at). `workspace_group` and `workspace_group_membership` model groups within a workspace and which members belong to which groups.
+- **Core:** Identity providers (keyed by `code`) and app users; `user_identity` links users to IdPs via `identity_provider_code` (subject, idp_attributes). **SOBA platform admins** are tracked in `soba_admin` (one row per user): grant source is either `idp` (refreshed on each login from IdP claims, e.g. role `soba_admin` in BC Gov SSO) or `direct` (manually added). IdP-sourced rows are updated or removed on login when the IdP no longer reports admin; direct grants are not touched by login. `req.isSobaAdmin` is set by the actor middleware for use by admin-only routes. Workspaces have optional `parent_workspace_id` for hierarchy. Ownership is by role-in-group: a workspace may have a group with `role_code = workspace_owner` (see `role` and `role_registry`); users in that group are owners. `workspace_membership` links users to workspaces (role, status, invite/accept, last_synced_at). `workspace_group` and `workspace_group_membership` model groups within a workspace; `workspace_group.role_code` can reference `role.code` so a group confers a role (e.g. workspace owner). Code values for roles and other code sets are defined in `backend/src/core/db/codes`.
 - **Forms:** `form` belongs to a workspace and has a `form_engine_code`. `form_version` is versioned per form (version_no, state, engine_schema_ref, engine_sync_status); `form_version_revision` stores change history. `submission` is tied to a form version and optional submitter; it has workflow_state, engine_submission_ref, and revision history in `submission_revision`. **Engine refs:** `form_version.engine_schema_ref` and `submission.engine_submission_ref` are the IDs of the schema and submission records (or JSON documents) in the form engine’s own store — e.g. Form.io MongoDB `_id` values — used to keep Soba and the engine in sync.
 - **Integration:** `integration_outbox` holds async events (topic, aggregate type/id, payload, status, retries) for the outbox worker.
-- **Plugins:** Personal tables: `personal_workspace_settings`, `personal_invite`, `personal_audit`. Enterprise tables: `enterprise_workspace_binding`, `enterprise_membership_binding`, `enterprise_group_binding` (workspace/membership/group ↔ external provider), plus `enterprise_sync_cursor` and `enterprise_sync_log` for sync runs.
+- **Plugins:** Enterprise tables: `enterprise_workspace_binding`, `enterprise_membership_binding`, `enterprise_group_binding` (workspace/membership/group ↔ external provider), plus `enterprise_sync_cursor` and `enterprise_sync_log` for sync runs.
 
 ---
 
@@ -38,13 +38,19 @@ erDiagram
     text external_user_id
     jsonb idp_attributes
   }
+  soba_admin {
+    uuid user_id PK_FK
+    text source
+    text identity_provider_code FK
+    timestamp synced_at
+  }
   workspace {
     uuid id PK
     text kind
     text name
     text slug
     text status
-    uuid owner_user_id FK
+    uuid parent_workspace_id FK
   }
   workspace_membership {
     uuid id PK
@@ -62,6 +68,24 @@ erDiagram
     text name
     text description
     text status
+    text role_code FK
+  }
+  role_status {
+    text code PK
+    text display
+    int sort_order
+    boolean is_active
+  }
+  role {
+    text code PK
+    text name
+    text description
+    text status
+  }
+  role_registry {
+    text role_code PK_FK
+    text provider_type
+    text feature_code FK
   }
   workspace_group_membership {
     uuid id PK
@@ -92,7 +116,7 @@ erDiagram
     timestamp published_at
     uuid published_by FK
     timestamp deleted_at
-    uuid deleted_by FK
+    text deleted_by
   }
   form_version_revision {
     uuid id PK
@@ -118,7 +142,7 @@ erDiagram
     int current_revision_no
     timestamp submitted_at
     timestamp deleted_at
-    uuid deleted_by FK
+    text deleted_by
   }
   submission_revision {
     uuid id PK
@@ -146,10 +170,13 @@ erDiagram
 
   identity_provider ||--o{ user_identity : "provides"
   app_user ||--o{ user_identity : "has"
-  app_user ||--o| workspace : "owns"
+  app_user ||--o| soba_admin : "platform admin"
+  workspace ||--o| workspace : "parent"
   workspace ||--o{ workspace_membership : "has"
   app_user ||--o{ workspace_membership : "member of"
   workspace ||--o{ workspace_group : "has"
+  role ||--o{ workspace_group : "role_code"
+  role_registry ||--o| role : "role_code"
   workspace_membership ||--o{ workspace_group_membership : "in group"
   workspace_group ||--o{ workspace_group_membership : "has member"
 
@@ -166,7 +193,7 @@ erDiagram
 
 ---
 
-## ERD: Plugins (personal and enterprise)
+## ERD: Plugins (enterprise)
 
 ```mermaid
 erDiagram
@@ -181,35 +208,7 @@ erDiagram
     uuid id PK
     uuid workspace_id FK
   }
-  app_user {
-    uuid id PK
-  }
 
-  personal_workspace_settings {
-    uuid id PK
-    uuid workspace_id FK
-    text default_landing_path
-    jsonb preferences
-  }
-  personal_invite {
-    uuid id PK
-    uuid workspace_id FK
-    text invitee_email
-    uuid invited_by_user_id FK
-    uuid accepted_by_user_id FK
-    text invite_token_hash
-    text status
-    timestamp expires_at
-    timestamp accepted_at
-  }
-  personal_audit {
-    uuid id PK
-    uuid workspace_id FK
-    uuid actor_user_id FK
-    text event_type
-    jsonb payload
-    timestamp occurred_at
-  }
   enterprise_workspace_binding {
     uuid id PK
     uuid workspace_id FK
@@ -256,13 +255,6 @@ erDiagram
     timestamp finished_at
   }
 
-  workspace ||--o| personal_workspace_settings : "has"
-  workspace ||--o{ personal_invite : "has"
-  app_user ||--o{ personal_invite : "invited by"
-  app_user ||--o| personal_invite : "accepted by"
-  workspace ||--o{ personal_audit : "has"
-  app_user ||--o{ personal_audit : "actor"
-
   workspace ||--o{ enterprise_workspace_binding : "has"
   workspace ||--o{ enterprise_membership_binding : "has"
   workspace_membership ||--o{ enterprise_membership_binding : "bound"
@@ -281,9 +273,13 @@ erDiagram
 | identity_provider | core.ts | IdP config (code PK, name, active). |
 | app_user | core.ts | Users; display label, profile JSON, status. |
 | user_identity | core.ts | Links users to IdPs (identity_provider_code, subject, external id, idp_attributes). |
-| workspace | core.ts | Workspaces (kind, name, slug, status, owner). |
+| soba_admin | core.ts | SOBA platform admins (user_id PK, source idp/direct, identity_provider_code, synced_at). Refreshed on login from IdP when plugin sets sobaAdmin in claim map. |
+| workspace | core.ts | Workspaces (kind, name, slug, status, optional parent_workspace_id). No single owner column; ownership is via group with role_code = workspace_owner (see codes). |
 | workspace_membership | core.ts | User–workspace link (role, status, source, invite/accept, last_synced_at). |
-| workspace_group | core.ts | Groups in a workspace (external id, name, description, status). |
+| workspace_group | core.ts | Groups in a workspace (external id, name, description, status, optional role_code FK to role). Groups with role_code = workspace_owner define workspace owners. |
+| role_status | roles.ts | Code table for role status (e.g. active, deprecated). |
+| role | roles.ts | Role registry (code PK, name, description, status). Extensible; features can register roles via role_registry. |
+| role_registry | roles.ts | Which roles exist and whether core or feature-owned (role_code, provider_type, feature_code). |
 | workspace_group_membership | core.ts | Membership–group link (status). |
 | form | forms.ts | Form definition (workspace, form_engine_code, slug, name, description, status; soft delete). |
 | form_version | forms.ts | Version of a form (version_no, state, engine schema/sync/error, current_revision_no, published_at/by, deleted_at/by). `engine_schema_ref` = form engine’s ID for the schema record (e.g. Form.io MongoDB _id). |
@@ -291,9 +287,6 @@ erDiagram
 | submission | forms.ts | Submission (form, version, submitter, workflow state, engine ref/sync/error, current_revision_no, submitted_at, soft delete). `engine_submission_ref` = form engine’s ID for the submission record (e.g. Form.io MongoDB _id). |
 | submission_revision | forms.ts | Revision history for a submission (before/after engine refs, change_note). |
 | integration_outbox | integration.ts | Outbox for async integration events (topic, aggregate, payload, status, retries, next_attempt_at, last_error). |
-| personal_workspace_settings | plugins.personal.ts | Per-workspace user preferences (e.g. default landing path). |
-| personal_invite | plugins.personal.ts | Email invites (invitee, token hash, status, expiry, accepted_at, accept). |
-| personal_audit | plugins.personal.ts | Audit log (actor_user_id, event type, payload, occurred at). |
 | enterprise_workspace_binding | plugins.enterprise.ts | Workspace ↔ external provider workspace (config, last_synced_at). |
 | enterprise_membership_binding | plugins.enterprise.ts | Membership ↔ external provider (external_role, provider_identity_type/subject, last_synced_at). |
 | enterprise_group_binding | plugins.enterprise.ts | Workspace group ↔ external provider group (last_synced_at). |
@@ -307,8 +300,6 @@ erDiagram
 - **Roles or permissions on forms or submissions.** We have not modelled resource-level roles or permissions (e.g. viewer/editor per form, or per-submission access). Access is currently implied by workspace membership (and, in enterprise, by groups). Fine-grained access can be added later if needed.
 
 - **C-Star–specific tables.** We have not modelled any C-Star–specific tables. The enterprise plugin provides generic tables (`enterprise_workspace_binding`, `enterprise_membership_binding`, `enterprise_group_binding`, plus sync cursors and logs) that use a `provider_code` (e.g. `cstar`) to support any external provider. The enterprise-cstar plugin uses these generic tables with `provider_code = 'cstar'`; no schema is tied to C-Star alone.
-
-- **Personal workspace tables.** The personal plugin tables (`personal_workspace_settings`, `personal_invite`, `personal_audit`) are mostly conceptual placeholders for now and are not cast in stone; they may change as we implement or refine the personal workspace flow.
 
 ---
 

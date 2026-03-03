@@ -3,8 +3,7 @@ import { env } from '../../config/env';
 import { getWorkspacePluginsConfig } from '../../config/workspacePlugins';
 import { getFormEnginePlugins } from '../../integrations/form-engine/FormEngineRegistry';
 import { getPluginCatalog } from '../../integrations/plugins/PluginRegistry';
-
-const CORE_FEATURES = ['form-versions', 'submissions', 'meta'];
+import { isFeatureEnabled, listFeatures } from '../../db/repos/featureRepo';
 
 export const metaApiService = {
   getPlugins() {
@@ -29,24 +28,17 @@ export const metaApiService = {
     };
   },
 
-  getFeatures() {
-    const plugins = getPluginCatalog();
-    const cacheCode = env.getCacheDefaultCode() ?? 'cache-memory';
-    const messageBusCode = env.getMessageBusDefaultCode() ?? 'messagebus-memory';
-    const formEngineCode =
-      env.getFormEngineDefaultCode() ?? getFormEnginePlugins()[0]?.code ?? 'formio-v5';
+  async getFeatures() {
+    const features = await listFeatures();
     return {
-      coreFeatures: CORE_FEATURES,
-      pluginFeatures: plugins
-        .filter((plugin) => Boolean(plugin.apiBasePath))
-        .map((plugin) => ({
-          code: plugin.code,
-          apiBasePath: plugin.apiBasePath as string,
-          enabled: plugin.enabled,
-        })),
-      activeCache: { code: cacheCode },
-      activeMessageBus: { code: messageBusCode },
-      activeFormEngine: { code: formEngineCode },
+      features: features.map((f) => ({
+        code: f.code,
+        name: f.name,
+        description: f.description,
+        version: f.version,
+        status: f.status,
+        enabled: isFeatureEnabled(f.status),
+      })),
     };
   },
 
