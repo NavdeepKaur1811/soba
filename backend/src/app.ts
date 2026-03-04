@@ -1,44 +1,72 @@
-import dotenv from 'dotenv';
-// Base first, then local overrides (convention from notify)
-dotenv.config({ path: '.env' });
-dotenv.config({ path: '.env.local', override: true });
+import { env } from './core/config/env';
+env.loadEnv();
 
 import express from 'express';
-import session from 'express-session';
-import passport from 'passport';
-import { router } from './routes';
+import rTracer from 'cls-rtracer';
 import cors from 'cors';
+import { checkJwt } from './core/middleware/auth';
+import { coreRouter } from './core/api';
+import { healthRouter } from './core/api/health';
+import { metaRouter } from './core/api/meta';
+import { buildOpenApiSpec } from './core/api/shared/openapi';
+import swaggerUi from 'swagger-ui-express';
+import { httpLogger, log } from './core/logging';
+import { resolveActor } from './core/middleware/actor';
+import { requireSobaAdmin } from './core/middleware/requireSobaAdmin';
+import { adminRouter } from './core/api/admin';
+import { globalRateLimit, apiRateLimit, publicRateLimit } from './core/middleware/rateLimit';
 
 const app = express();
 const port = 4000;
 
 if (process.env.NODE_ENV === 'development') {
-  console.log('Allowing CORS for development environment');
+  log.info('Allowing CORS for development environment');
   app.use(cors());
 } else {
-  console.log('Blocking CORS for production environment');
+  log.info('Blocking CORS for production environment');
 }
 
 app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
+  rTracer.expressMiddleware({
+    useHeader: true,
+    headerName: 'X-Request-Id',
+    echoHeader: true,
   }),
 );
 
-app.use(passport.initialize());
-app.use(passport.session());
+app.use(httpLogger);
 
-app.get('/api/docs', (_, res) => {
-  res.send('FormIO Wrapper API Documentation');
+app.use(globalRateLimit);
+
+// ——— Public routes (no authentication) ———
+app.get('/api/docs/openapi.json', publicRateLimit, (_req, res) => {
+  res.json(buildOpenApiSpec());
 });
+app.use(
+  '/api/docs',
+  publicRateLimit,
+  swaggerUi.serve,
+  swaggerUi.setup(null, {
+    swaggerOptions: {
+      url: '/api/docs/openapi.json',
+    },
+  }),
+);
 
-app.get('/api/health', (_, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Mount API router at /api so routes like /api/form/test map correctly.
-app.use('/api', router);
+// ——— Core v1 API ———
+app.use('/api/v1/meta', publicRateLimit, express.json(), metaRouter);
+app.use('/api/v1/health', publicRateLimit, healthRouter);
+app.use('/api/v1', apiRateLimit, express.json(), checkJwt(), resolveActor, coreRouter);
+app.use(
+  '/api/v1/admin',
+  apiRateLimit,
+  express.json(),
+  checkJwt(),
+  resolveActor,
+  requireSobaAdmin,
+  adminRouter,
+);
 
 app.listen(port, () => {
-  return console.log(`Express is listening at http://localhost:${port}`);
+  log.info({ port }, 'Express is listening');
 });
