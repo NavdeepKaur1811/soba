@@ -6,7 +6,7 @@ Quick orientation for product owners and developers: what “core” is, how Dri
 
 **Core** is the shared backend kernel under `backend/src/core/`. It provides:
 
-- **API** — Forms, submissions, and meta endpoints (OpenAPI, pagination). **Meta** is public and mounted at `/api/v1/meta` (no auth). **Forms and submissions** are under `/api/v1` with JWT and core context (workspace/membership).
+- **API** — Forms, submissions, meta, workspaces, members, admin, and health endpoints (OpenAPI, pagination). **Meta** and **health** are public at `/api/v1/meta` and `/api/v1/health` (no auth). **Admin** is at `/api/v1/admin` with JWT and `requireSobaAdmin`. **Forms, submissions, workspaces, and members** are under `/api/v1` with JWT and core context (workspace/membership).
 - **Auth** — Split between **IdP (auth source) plugins** (token validation and claim mapping to user identity) and **core** (request context: workspace and membership from workspace resolver plugins + DB). IdP plugins are configured via `IDP_PLUGINS` and live under `backend/src/plugins/` (e.g. `idp-bcgov-sso`, `idp-github`).
 - **Config** — Environment loading and plugin configuration
 - **Database** — Drizzle schema, repos, migrations, seed, and query logging
@@ -91,10 +91,10 @@ flowchart LR
 
 | Area             | Location                                                                                                                                  |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| API routes       | `backend/src/core/api/` — forms, submissions, meta                                                                                        |
+| API routes       | `backend/src/core/api/` — forms, submissions, meta, workspaces, members, admin, health                                                   |
 | Features         | `backend/src/features/` — vertically sliced features (APIs, optional schemas); mounted by app/routes, not by core                        |
-| Schema & types   | `backend/src/core/db/schema/` — core, forms, integration, plugins; feature schemas (if any) included in same migration set               |
-| Repos            | `backend/src/core/db/repos/` — form, formVersion, submission, workspace, membership, outbox, appUser, sobaAdmin; plugin-specific repos (e.g. enterprise bindings) in `backend/src/core/db/repos/plugins/` |
+| Schema & types   | `backend/src/core/db/schema/` — core, roles, codes, feature, forms, integration, plugins.enterprise; feature schemas (if any) in same migration set |
+| Repos            | `backend/src/core/db/repos/` — form, formVersion, submission, workspace, membership, outbox, appUser, sobaAdmin, identityLookup, role, feature, codeSetRegistry; plugin repos in `backend/src/core/db/repos/plugins/` |
 | Plugins          | `backend/src/plugins/` — one directory per plugin (IdP, workspace, form engine, cache, message bus); each exports its definition. IdP discovery in `backend/src/auth/`; plugin registry in `backend/src/core/integrations/plugins/` |
 | Composition root | `backend/src/core/container.ts`                                                                                                           |
 | Migrations       | `backend/drizzle/` — SQL and journal                                                                                                      |

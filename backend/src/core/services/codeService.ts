@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, or, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   featureStatus,
@@ -8,14 +8,13 @@ import {
   workspaceMembershipRole,
   workspaceMembershipStatus,
 } from '../db/schema';
-import { FeatureStatus } from '../db/codes';
-import { getByCodeSet, listRegistry } from '../db/repos/codeSetRegistryRepo';
 
 export interface CodeRow {
   code: string;
   display: string;
   sortOrder: number;
   isActive: boolean;
+  source: string;
 }
 
 export interface RegisteredCodeSet {
@@ -23,6 +22,8 @@ export interface RegisteredCodeSet {
   providerType: string;
   featureCode: string | null;
 }
+
+const CODE_SOURCE_CORE = 'core';
 
 const CODE_TABLES: Record<
   string,
@@ -41,67 +42,113 @@ const CODE_TABLES: Record<
   outbox_status: outboxStatus,
 };
 
-export const codeService = {
+type CodeTable = (typeof CODE_TABLES)[keyof typeof CODE_TABLES];
+
+/** Rows included when source = 'core' or feature is enabled. */
+function enabledSourceCondition(table: CodeTable) {
+  return or(
+    eq(table.source, CODE_SOURCE_CORE),
+    sql`${table.source} IN (SELECT code FROM soba.feature WHERE status = 'enabled')`,
+  );
+}
+
+async function listCodeSetsOnlyEnabled(): Promise<RegisteredCodeSet[]> {
+  const { features } = await import('../db/schema');
+  const result: RegisteredCodeSet[] = [];
+  for (const [codeSet, table] of Object.entries(CODE_TABLES)) {
+    const rows = await db
+      .selectDistinct({ source: table.source })
+      .from(table)
+      .leftJoin(features, eq(table.source, features.code))
+      .where(or(eq(table.source, CODE_SOURCE_CORE), eq(features.status, 'enabled')));
+    for (const r of rows) {
+      result.push({
+        codeSet,
+        providerType: r.source === CODE_SOURCE_CORE ? 'core' : 'feature',
+        featureCode: r.source === CODE_SOURCE_CORE ? null : r.source,
+      });
+    }
+  }
+  return result;
+}
+
+export class CodeService {
   async getRegisteredCodeSets(options?: {
     onlyEnabledFeatures?: boolean;
   }): Promise<RegisteredCodeSet[]> {
-    return listRegistry(options);
-  },
-
-  async getCodes(codeSet: string, options?: { activeOnly?: boolean }): Promise<CodeRow[]> {
-    const registryRow = await getByCodeSet(codeSet);
-    if (!registryRow) return [];
-    if (registryRow.providerType === 'feature' && registryRow.featureCode) {
-      const { getFeatureByCode } = await import('../db/repos/featureRepo');
-      const feature = await getFeatureByCode(registryRow.featureCode);
-      if (feature?.status !== FeatureStatus.enabled) return [];
+    if (options?.onlyEnabledFeatures !== false) {
+      return listCodeSetsOnlyEnabled();
     }
+    const result: RegisteredCodeSet[] = [];
+    for (const [codeSet, table] of Object.entries(CODE_TABLES)) {
+      const rows = await db.selectDistinct({ source: table.source }).from(table);
+      for (const r of rows) {
+        result.push({
+          codeSet,
+          providerType: r.source === CODE_SOURCE_CORE ? 'core' : 'feature',
+          featureCode: r.source === CODE_SOURCE_CORE ? null : r.source,
+        });
+      }
+    }
+    return result;
+  }
+
+  async getCodes(
+    codeSet: string,
+    options?: { activeOnly?: boolean; onlyEnabledFeatures?: boolean },
+  ): Promise<CodeRow[]> {
     const table = CODE_TABLES[codeSet];
     if (!table) return [];
-    const baseQuery = db
-      .select({
-        code: table.code,
-        display: table.display,
-        sortOrder: table.sortOrder,
-        isActive: table.isActive,
-      })
-      .from(table)
-      .orderBy(asc(table.sortOrder), asc(table.code));
-    const rows = options?.activeOnly
-      ? await baseQuery.where(eq(table.isActive, true))
-      : await baseQuery;
-    return rows as CodeRow[];
-  },
-
-  async getCode(
-    codeSet: string,
-    code: string,
-    options?: { activeOnly?: boolean },
-  ): Promise<CodeRow | null> {
-    const registryRow = await getByCodeSet(codeSet);
-    if (!registryRow) return null;
-    if (registryRow.providerType === 'feature' && registryRow.featureCode) {
-      const { getFeatureByCode } = await import('../db/repos/featureRepo');
-      const feature = await getFeatureByCode(registryRow.featureCode);
-      if (feature?.status !== FeatureStatus.enabled) return null;
-    }
-    const table = CODE_TABLES[codeSet];
-    if (!table) return null;
-    const where = options?.activeOnly
-      ? and(eq(table.code, code), eq(table.isActive, true))
-      : eq(table.code, code);
+    const onlyEnabled = options?.onlyEnabledFeatures !== false;
+    const conditions = [
+      ...(onlyEnabled ? [enabledSourceCondition(table)] : []),
+      ...(options?.activeOnly === true ? [eq(table.isActive, true)] : []),
+    ];
+    const where =
+      conditions.length === 0
+        ? undefined
+        : conditions.length === 1
+          ? conditions[0]
+          : and(...conditions);
     const rows = await db
       .select({
         code: table.code,
         display: table.display,
         sortOrder: table.sortOrder,
         isActive: table.isActive,
+        source: table.source,
       })
       .from(table)
       .where(where)
+      .orderBy(asc(table.sortOrder), asc(table.code));
+    return rows as CodeRow[];
+  }
+
+  async getCode(
+    codeSet: string,
+    code: string,
+    options?: { activeOnly?: boolean },
+  ): Promise<CodeRow | null> {
+    const table = CODE_TABLES[codeSet];
+    if (!table) return null;
+    const conditions = [
+      eq(table.code, code),
+      enabledSourceCondition(table),
+      ...(options?.activeOnly === true ? [eq(table.isActive, true)] : []),
+    ];
+    const rows = await db
+      .select({
+        code: table.code,
+        display: table.display,
+        sortOrder: table.sortOrder,
+        isActive: table.isActive,
+        source: table.source,
+      })
+      .from(table)
+      .where(and(...conditions))
       .limit(1);
     return (rows[0] as CodeRow) ?? null;
-  },
+  }
 
   async isValidCode(
     codeSet: string,
@@ -110,5 +157,7 @@ export const codeService = {
   ): Promise<boolean> {
     const row = await this.getCode(codeSet, code, options);
     return row !== null;
-  },
-};
+  }
+}
+
+export const codeService = new CodeService();

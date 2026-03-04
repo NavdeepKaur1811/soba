@@ -269,12 +269,17 @@ type WorkspaceItem = {
 
 type WorkspaceListResponse = {
   items: WorkspaceItem[];
-  page?: {
+  page: {
     limit: number;
     hasMore: boolean;
     nextCursor: string | null;
     cursorMode: string;
   };
+  filters: {
+    kind?: string;
+    status?: string;
+  };
+  sort: string;
 };
 
 type MemberItem = {
@@ -287,12 +292,17 @@ type MemberItem = {
 
 type MembersListResponse = {
   items: MemberItem[];
-  page?: {
+  page: {
     limit: number;
     hasMore: boolean;
     nextCursor: string | null;
     cursorMode: string;
   };
+  filters: {
+    role?: string;
+    status?: string;
+  };
+  sort: string;
 };
 
 type SobaAdminItem = {
@@ -305,7 +315,7 @@ type SobaAdminItem = {
 
 type SobaAdminsListResponse = {
   items: SobaAdminItem[];
-  page?: {
+  page: {
     limit: number;
     hasMore: boolean;
     nextCursor: string | null;

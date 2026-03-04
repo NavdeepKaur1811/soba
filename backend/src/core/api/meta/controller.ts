@@ -21,66 +21,80 @@ export const getBuildMeta = (_req: Request, res: Response) => {
 
 export const getCodesMeta = asyncHandler(async (req: Request, res: Response) => {
   const onlyEnabledFeatures = req.query.only_enabled_features === 'true';
-  const codeSets = await codeService.getRegisteredCodeSets({ onlyEnabledFeatures });
-  res.json({ codeSets });
-});
+  const codeSetFilter = req.query.code_set as string | undefined;
+  const sourceFilter = req.query.source as string | undefined;
+  const isActiveFilter = req.query.is_active as string | undefined;
 
-export const getCodesBySetMeta = asyncHandler(async (req: Request, res: Response) => {
-  const codeSet = req.params.codeSet as string;
-  const activeOnly = req.query.active_only === 'true';
-  const codeSets = await codeService.getRegisteredCodeSets();
-  const registryRow = codeSets.find((r) => r.codeSet === codeSet);
-  if (!registryRow) {
-    res.status(404).json({ error: 'Code set not found' });
-    return;
+  const codeSets = await codeService.getRegisteredCodeSets({ onlyEnabledFeatures });
+  let codeSetNames = [...new Set(codeSets.map((r) => r.codeSet))];
+  if (codeSetFilter) {
+    const wanted = codeSetFilter
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    codeSetNames = codeSetNames.filter((name) => wanted.includes(name));
   }
-  if (registryRow.providerType === 'feature' && registryRow.featureCode) {
-    const { getFeatureByCode } = await import('../../db/repos/featureRepo');
-    const feature = await getFeatureByCode(registryRow.featureCode);
-    if (!feature || feature.status !== 'enabled') {
-      res.status(404).json({ error: 'Feature not enabled' });
-      return;
-    }
+  if (sourceFilter) {
+    codeSetNames = codeSetNames.filter((name) =>
+      codeSets.some(
+        (r) =>
+          r.codeSet === name &&
+          (sourceFilter === 'core' ? r.providerType === 'core' : r.featureCode === sourceFilter),
+      ),
+    );
   }
-  const items = await codeService.getCodes(codeSet, { activeOnly });
-  res.json({
-    items: items.map((row) => ({
-      code: row.code,
-      display: row.display,
-      sort_order: row.sortOrder,
-      is_active: row.isActive,
-    })),
-  });
+
+  const result: Record<
+    string,
+    Array<{ code: string; display: string; sort_order: number; is_active: boolean; source: string }>
+  > = {};
+  for (const codeSet of codeSetNames) {
+    const items = await codeService.getCodes(codeSet, {
+      activeOnly: isActiveFilter === 'true',
+      onlyEnabledFeatures,
+    });
+    let list = items;
+    if (isActiveFilter === 'false') list = items.filter((r) => !r.isActive);
+    if (sourceFilter) list = list.filter((r) => r.source === sourceFilter);
+    result[codeSet] = list.map((r) => ({
+      code: r.code,
+      display: r.display,
+      sort_order: r.sortOrder,
+      is_active: r.isActive,
+      source: r.source,
+    }));
+  }
+  res.json(result);
 });
 
 export const getRolesMeta = asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as {
-    limit?: number;
-    cursor?: string;
+    code?: string;
+    source?: string;
+    status?: string;
     only_enabled_features?: 'true' | 'false';
   };
-  const result = await metaApiService.getRolesPaginated({
-    limit: query.limit ?? 20,
-    cursor: query.cursor,
+  const codeFilter = query.code
+    ? query.code
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
+  const result = await metaApiService.getRoles({
+    code: codeFilter,
+    source: query.source,
+    status: query.status,
     onlyEnabledFeatures: query.only_enabled_features === 'true',
   });
-  res.json(result);
-});
-
-export const getRoleByCodeMeta = asyncHandler(async (req: Request, res: Response) => {
-  const roleCode = req.params.roleCode as string;
-  const onlyEnabledFeatures = req.query.only_enabled_features !== 'false';
-  const role = await metaApiService.getRole(roleCode, { onlyEnabledFeatures });
-  if (!role) {
-    res.status(404).json({ error: 'Role not found' });
-    return;
-  }
   res.json({
-    roleCode: role.code,
-    name: role.name,
-    description: role.description,
-    status: role.status,
-    createdAt: role.createdAt.toISOString(),
-    updatedAt: role.updatedAt.toISOString(),
+    roles: result.roles.map((r) => ({
+      roleCode: r.code,
+      name: r.name,
+      description: r.description,
+      status: r.status,
+      source: r.source,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    })),
   });
 });

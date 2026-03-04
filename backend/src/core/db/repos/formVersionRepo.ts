@@ -225,7 +225,6 @@ export const appendFormVersionRevision = async (input: SaveRevisionInput, tx?: D
 export const markFormVersionDeleted = async (
   workspaceId: string,
   formVersionId: string,
-  actorId: string,
   actorDisplayLabel: string | null,
 ) => {
   const updated = await db

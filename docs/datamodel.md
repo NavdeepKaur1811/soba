@@ -8,7 +8,7 @@ All tables live in the Postgres schema **soba**.
 
 - **Multi-tenancy:** Soba is designed to be multi-tenant. We achieve tenant isolation by **siloing all data access and queries by `workspace_id`**. Every tenant-scoped table has a `workspace_id` column; every API and repo query that touches tenant data is scoped to the workspace resolved for the request. There are no cross-workspace reads or writes. See [Core overview](core-overview.md) and [Core deep dive](core-deep-dive.md) for how workspace resolution and scoping work.
 
-- **Core:** Identity providers (keyed by `code`) and app users; `user_identity` links users to IdPs via `identity_provider_code` (subject, idp_attributes). **SOBA platform admins** are tracked in `soba_admin` (one row per user): grant source is either `idp` (refreshed on each login from IdP claims, e.g. role `soba_admin` in BC Gov SSO) or `direct` (manually added). IdP-sourced rows are updated or removed on login when the IdP no longer reports admin; direct grants are not touched by login. `req.isSobaAdmin` is set by the actor middleware for use by admin-only routes. Workspaces have optional `parent_workspace_id` for hierarchy. Ownership is by role-in-group: a workspace may have a group with `role_code = workspace_owner` (see `role` and `role_registry`); users in that group are owners. `workspace_membership` links users to workspaces (role, status, invite/accept, last_synced_at). `workspace_group` and `workspace_group_membership` model groups within a workspace; `workspace_group.role_code` can reference `role.code` so a group confers a role (e.g. workspace owner). Code values for roles and other code sets are defined in `backend/src/core/db/codes`.
+- **Core:** Identity providers (keyed by `code`; optional `hint`) and app users; `user_identity` links users to IdPs via `identity_provider_code` (subject, idp_attributes). **SOBA platform admins** are tracked in `soba_admin` (one row per user): grant source is either `idp` (refreshed on each login from IdP claims, e.g. role `soba_admin` in BC Gov SSO) or `direct` (manually added). IdP-sourced rows are updated or removed on login when the IdP no longer reports admin; direct grants are not touched by login. `req.isSobaAdmin` is set by the actor middleware for use by admin-only routes. Workspaces have optional `parent_workspace_id` for hierarchy. Ownership is by role-in-group: a workspace may have a group with `role_code = workspace_owner` (see `role`); users in that group are owners. `workspace_membership` links users to workspaces (role, status, invite/accept, last_synced_at). `workspace_group` and `workspace_group_membership` model groups within a workspace; `workspace_group.role_code` can reference `role.code` so a group confers a role (e.g. workspace owner). Code tables live in `backend/src/core/db/schema/`: `codes.ts` (form_status, form_version_state, workspace_membership_role, workspace_membership_status, outbox_status, code_set_registry), `roles.ts` (role_status, role with source, feature_code), `feature.ts` (feature_status, feature).
 - **Forms:** `form` belongs to a workspace and has a `form_engine_code`. `form_version` is versioned per form (version_no, state, engine_schema_ref, engine_sync_status); `form_version_revision` stores change history. `submission` is tied to a form version and optional submitter; it has workflow_state, engine_submission_ref, and revision history in `submission_revision`. **Engine refs:** `form_version.engine_schema_ref` and `submission.engine_submission_ref` are the IDs of the schema and submission records (or JSON documents) in the form engine’s own store — e.g. Form.io MongoDB `_id` values — used to keep Soba and the engine in sync.
 - **Integration:** `integration_outbox` holds async events (topic, aggregate type/id, payload, status, retries) for the outbox worker.
 - **Plugins:** Enterprise tables: `enterprise_workspace_binding`, `enterprise_membership_binding`, `enterprise_group_binding` (workspace/membership/group ↔ external provider), plus `enterprise_sync_cursor` and `enterprise_sync_log` for sync runs.
@@ -22,6 +22,7 @@ erDiagram
   identity_provider {
     text code PK
     text name
+    text hint
     boolean is_active
   }
   app_user {
@@ -81,10 +82,7 @@ erDiagram
     text name
     text description
     text status
-  }
-  role_registry {
-    text role_code PK_FK
-    text provider_type
+    text source
     text feature_code FK
   }
   workspace_group_membership {
@@ -176,7 +174,7 @@ erDiagram
   app_user ||--o{ workspace_membership : "member of"
   workspace ||--o{ workspace_group : "has"
   role ||--o{ workspace_group : "role_code"
-  role_registry ||--o| role : "role_code"
+  feature ||--o| role : "feature_code"
   workspace_membership ||--o{ workspace_group_membership : "in group"
   workspace_group ||--o{ workspace_group_membership : "has member"
 
@@ -270,7 +268,7 @@ erDiagram
 
 | Table | Schema file | Description |
 |-------|-------------|-------------|
-| identity_provider | core.ts | IdP config (code PK, name, active). |
+| identity_provider | core.ts | IdP config (code PK, name, hint, active). |
 | app_user | core.ts | Users; display label, profile JSON, status. |
 | user_identity | core.ts | Links users to IdPs (identity_provider_code, subject, external id, idp_attributes). |
 | soba_admin | core.ts | SOBA platform admins (user_id PK, source idp/direct, identity_provider_code, synced_at). Refreshed on login from IdP when plugin sets sobaAdmin in claim map. |
@@ -278,8 +276,7 @@ erDiagram
 | workspace_membership | core.ts | User–workspace link (role, status, source, invite/accept, last_synced_at). |
 | workspace_group | core.ts | Groups in a workspace (external id, name, description, status, optional role_code FK to role). Groups with role_code = workspace_owner define workspace owners. |
 | role_status | roles.ts | Code table for role status (e.g. active, deprecated). |
-| role | roles.ts | Role registry (code PK, name, description, status). Extensible; features can register roles via role_registry. |
-| role_registry | roles.ts | Which roles exist and whether core or feature-owned (role_code, provider_type, feature_code). |
+| role | roles.ts | Roles (code PK, name, description, status, source, feature_code). source = 'core' or 'feature'; feature_code set when feature-owned. |
 | workspace_group_membership | core.ts | Membership–group link (status). |
 | form | forms.ts | Form definition (workspace, form_engine_code, slug, name, description, status; soft delete). |
 | form_version | forms.ts | Version of a form (version_no, state, engine schema/sync/error, current_revision_no, published_at/by, deleted_at/by). `engine_schema_ref` = form engine’s ID for the schema record (e.g. Form.io MongoDB _id). |
@@ -292,6 +289,14 @@ erDiagram
 | enterprise_group_binding | plugins.enterprise.ts | Workspace group ↔ external provider group (last_synced_at). |
 | enterprise_sync_cursor | plugins.enterprise.ts | Sync cursors per workspace/provider/key. |
 | enterprise_sync_log | plugins.enterprise.ts | Sync run log (type, status, message, started/finished). |
+| form_status | codes.ts | Code table for form status. |
+| form_version_state | codes.ts | Code table for form version state. |
+| workspace_membership_role | codes.ts | Code table for workspace membership role. |
+| workspace_membership_status | codes.ts | Code table for workspace membership status. |
+| outbox_status | codes.ts | Code table for outbox event status. |
+| code_set_registry | codes.ts | Registry of code sets: core vs feature-owned (code_set, provider_type, feature_code). |
+| feature_status | feature.ts | Code table for feature status (e.g. enabled, disabled). |
+| feature | feature.ts | Feature registry (code PK, name, description, version, status). |
 
 ---
 

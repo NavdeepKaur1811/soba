@@ -16,24 +16,25 @@ import {
 import {
   CreateFormBodySchema,
   CreateFormVersionBodySchema,
+  FormIdParamsSchema,
+  FormVersionIdParamsSchema,
   ListFormsQuerySchema,
   ListFormVersionsQuerySchema,
   SaveFormVersionBodySchema,
   SaveFormVersionParamsSchema,
   UpdateFormBodySchema,
   UpdateFormVersionBodySchema,
-  UpdateFormVersionParamsSchema,
 } from './schema';
 
 const router = express.Router();
 
 router.get('/forms', validateRequest({ query: ListFormsQuerySchema }), listForms);
 router.post('/forms', validateRequest({ body: CreateFormBodySchema }), createForm);
-router.get('/forms/:id', validateRequest({ params: UpdateFormVersionParamsSchema }), getForm);
+router.get('/forms/:id', validateRequest({ params: FormIdParamsSchema }), getForm);
 router.patch(
   '/forms/:id',
   validateRequest({
-    params: UpdateFormVersionParamsSchema,
+    params: FormIdParamsSchema,
     body: UpdateFormBodySchema,
   }),
   updateForm,
@@ -45,7 +46,7 @@ router.get(
 );
 router.get(
   '/form-versions/:id',
-  validateRequest({ params: UpdateFormVersionParamsSchema }),
+  validateRequest({ params: FormVersionIdParamsSchema }),
   getFormVersion,
 );
 
@@ -57,7 +58,7 @@ router.post(
 router.patch(
   '/form-versions/:id',
   validateRequest({
-    params: UpdateFormVersionParamsSchema,
+    params: FormVersionIdParamsSchema,
     body: UpdateFormVersionBodySchema,
   }),
   updateFormVersion,
@@ -72,9 +73,9 @@ router.post(
 );
 router.delete(
   '/form-versions/:id',
-  validateRequest({ params: UpdateFormVersionParamsSchema }),
+  validateRequest({ params: FormVersionIdParamsSchema }),
   deleteFormVersion,
 );
-router.delete('/forms/:id', validateRequest({ params: UpdateFormVersionParamsSchema }), deleteForm);
+router.delete('/forms/:id', validateRequest({ params: FormIdParamsSchema }), deleteForm);
 
 export { router as formVersionsRouter };

@@ -48,34 +48,29 @@ export const BuildMetaResponseSchema = z
   })
   .openapi('Meta_BuildResponse');
 
-export const CodeSetMetaSchema = z
-  .object({
-    codeSet: z.string(),
-    providerType: z.string(),
-    featureCode: z.string().nullable(),
-  })
-  .openapi('Meta_CodeSet');
-
-export const CodeSetsMetaResponseSchema = z
-  .object({
-    codeSets: z.array(CodeSetMetaSchema),
-  })
-  .openapi('Meta_CodeSetsResponse');
-
-export const CodeRowMetaSchema = z
+export const CodeRowWithSourceMetaSchema = z
   .object({
     code: z.string(),
     display: z.string(),
     sort_order: z.number(),
     is_active: z.boolean(),
+    source: z.string(),
   })
-  .openapi('Meta_CodeRow');
+  .openapi('Meta_CodeRowWithSource');
 
-export const CodesMetaResponseSchema = z
+/** Response: object keyed by code set name, values = arrays of code rows with source */
+export const CodesKeyedMetaResponseSchema = z
+  .record(z.string(), z.array(CodeRowWithSourceMetaSchema))
+  .openapi('Meta_CodesKeyedResponse');
+
+export const ListCodesQuerySchema = z
   .object({
-    items: z.array(CodeRowMetaSchema),
+    code_set: z.string().optional(),
+    source: z.string().optional(),
+    is_active: z.enum(['true', 'false']).optional(),
+    only_enabled_features: z.enum(['true', 'false']).optional(),
   })
-  .openapi('Meta_CodesResponse');
+  .openapi('Meta_ListCodesQuery');
 
 export const FormEngineMetaSchema = z
   .object({
@@ -95,48 +90,32 @@ export const FormEnginesMetaResponseSchema = z
   })
   .openapi('Meta_FormEnginesResponse');
 
-export const RoleMetaSchema = z
+export const RoleWithSourceMetaSchema = z
   .object({
     roleCode: z.string(),
-    providerType: z.string(),
-    featureCode: z.string().nullable(),
+    name: z.string(),
+    description: z.string().nullable(),
+    status: z.string(),
+    source: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
   })
-  .openapi('Meta_Role');
+  .openapi('Meta_RoleWithSource');
 
 export const ListRolesQuerySchema = z
   .object({
-    limit: z.coerce.number().int().min(1).max(100).default(20),
-    cursor: z.string().min(1).optional(),
+    code: z.string().optional(),
+    source: z.string().optional(),
+    status: z.string().optional(),
     only_enabled_features: z.enum(['true', 'false']).optional(),
   })
   .openapi('Meta_ListRolesQuery');
 
 export const RolesMetaResponseSchema = z
   .object({
-    roles: z.array(RoleMetaSchema),
-    page: z.object({
-      limit: z.number().int().min(1),
-      hasMore: z.boolean(),
-      nextCursor: z.string().nullable(),
-      cursorMode: z.enum(['id']),
-    }),
-    filters: z.object({
-      only_enabled_features: z.boolean().optional(),
-    }),
-    sort: z.string(),
+    roles: z.array(RoleWithSourceMetaSchema),
   })
   .openapi('Meta_RolesResponse');
-
-export const RoleByCodeMetaSchema = z
-  .object({
-    roleCode: z.string(),
-    name: z.string(),
-    description: z.string().nullable(),
-    status: z.string(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi('Meta_RoleByCode');
 
 export const registerMetaOpenApi = (registry: OpenAPIRegistry) => {
   registry.registerPath({
@@ -207,34 +186,37 @@ export const registerMetaOpenApi = (registry: OpenAPIRegistry) => {
     method: 'get',
     path: '/meta/codes',
     tags: ['core.meta'],
-    responses: {
-      200: {
-        description:
-          'Registered code sets. Query: only_enabled_features=true to exclude feature-owned sets whose feature is not enabled.',
-        content: {
-          'application/json': {
-            schema: CodeSetsMetaResponseSchema,
-          },
-        },
-      },
+    request: {
+      query: ListCodesQuerySchema,
     },
-  });
-
-  registry.registerPath({
-    method: 'get',
-    path: '/meta/codes/{codeSet}',
-    tags: ['core.meta'],
     responses: {
       200: {
         description:
-          'Codes for the given code set. Query: active_only=true. 404 if code set not in registry or feature not enabled.',
+          'Code sets keyed by name. Query: code_set (single or comma-separated), source, is_active, only_enabled_features.',
         content: {
           'application/json': {
-            schema: CodesMetaResponseSchema,
+            schema: CodesKeyedMetaResponseSchema,
+            example: {
+              form_status: [
+                {
+                  code: 'active',
+                  display: 'Active',
+                  sort_order: 0,
+                  is_active: true,
+                  source: 'core',
+                },
+                {
+                  code: 'archived',
+                  display: 'Archived',
+                  sort_order: 1,
+                  is_active: true,
+                  source: 'core',
+                },
+              ],
+            },
           },
         },
       },
-      404: { description: 'Code set not found or feature not enabled' },
     },
   });
 
@@ -248,31 +230,13 @@ export const registerMetaOpenApi = (registry: OpenAPIRegistry) => {
     responses: {
       200: {
         description:
-          'Registered roles with cursor pagination. Query: limit, cursor, only_enabled_features=true.',
+          'All roles (flat list). Query: code (comma-separated), source, status, only_enabled_features.',
         content: {
           'application/json': {
             schema: RolesMetaResponseSchema,
           },
         },
       },
-      400: { description: 'Invalid query or cursor' },
-    },
-  });
-
-  registry.registerPath({
-    method: 'get',
-    path: '/meta/roles/{roleCode}',
-    tags: ['core.meta'],
-    responses: {
-      200: {
-        description: 'Role by code. 404 if not in registry or feature not enabled.',
-        content: {
-          'application/json': {
-            schema: RoleByCodeMetaSchema,
-          },
-        },
-      },
-      404: { description: 'Role not found or feature not enabled' },
     },
   });
 };

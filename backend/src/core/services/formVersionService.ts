@@ -132,15 +132,10 @@ export class FormVersionService {
   }
 
   async delete(input: DeleteInput) {
-    return markFormVersionDeleted(
-      input.workspaceId,
-      input.formVersionId,
-      input.actorId,
-      input.actorDisplayLabel,
-    );
+    return markFormVersionDeleted(input.workspaceId, input.formVersionId, input.actorDisplayLabel);
   }
 
-  async get(workspaceId: string, actorId: string, formVersionId: string) {
+  async get(workspaceId: string, formVersionId: string) {
     return getFormVersionById(workspaceId, formVersionId);
   }
 

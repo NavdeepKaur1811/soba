@@ -171,7 +171,6 @@ export const updateForm = async (input: UpdateFormInput): Promise<FormRecord | n
 export const markFormDeleted = async (
   workspaceId: string,
   formId: string,
-  actorId: string,
   actorDisplayLabel: string | null,
 ) => {
   const updated = await db

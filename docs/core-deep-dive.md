@@ -65,9 +65,9 @@ Features are the right place for product-specific behaviour that builds on core;
 ### API
 
 - **Location:** `backend/src/core/api/`
-- **Domains:** Forms, submissions, meta. Each domain has a router, controller(s), service factory, and OpenAPI registration.
+- **Domains:** Forms, submissions, meta, workspaces, members, admin, health. Each domain has a router, controller(s), service factory (where applicable), and OpenAPI registration.
 - **Shared:** `shared/openapi.ts`, `shared/pagination.ts`, `shared/asyncHandler.ts`, `shared/types.ts`
-- **Mounting:** In `app.ts`, **meta** is public and mounted separately at `/api/v1/meta` (no JWT, no core context). **Forms and submissions** are mounted on the core router at `/api/v1` with `express.json()`, JWT, actor resolution, and core context (workspace/membership).
+- **Mounting:** In `app.ts`, **meta** and **health** are public and mounted at `/api/v1/meta` and `/api/v1/health` (no JWT, no core context). **Admin** is mounted at `/api/v1/admin` with JWT, actor resolution, and `requireSobaAdmin`. **Forms, submissions, workspaces, and members** are mounted on the core router at `/api/v1` with `express.json()`, JWT, actor resolution, and core context (workspace/membership).
 
 ### Auth
 
@@ -110,8 +110,8 @@ sequenceDiagram
 
 - **Location:** `backend/src/core/db/`
 - **Client:** `client.ts` — creates a `pg` Pool from env, then `drizzle(pool, { schema, logger: drizzleQueryLogger })`. Exports `db`, `Db`, `Tx`, `DbOrTx`, `pool`.
-- **Schema:** Re-exported from `schema/index.ts` (core, forms, integration, plugins). All tables live in the Postgres schema `soba`.
-- **Repos:** One or more modules per domain (formRepo, formVersionRepo, submissionRepo, workspaceRepo, membershipRepo, outboxRepo, appUserRepo, sobaAdminRepo; plugin repos under `repos/plugins/`).
+- **Schema:** Re-exported from `schema/index.ts` (sobaSchema, core, feature, roles, codes, forms, integration, plugins.enterprise). All tables live in the Postgres schema `soba`.
+- **Repos:** One or more modules per domain (formRepo, formVersionRepo, submissionRepo, workspaceRepo, membershipRepo, outboxRepo, appUserRepo, sobaAdminRepo, identityLookup, roleRepo, featureRepo, codeSetRegistryRepo; plugin repos under `repos/plugins/`).
 - **Migrations:** `migrate.ts` ensures the database exists (optional admin connection), then runs `migrate(db, { migrationsFolder: 'drizzle' })`. Migrations are generated into `backend/drizzle/` by drizzle-kit.
 - **Seed:** `seed.ts` for initial data (e.g. identity provider, dev users).
 - **Extras:** `appUserView.ts` (view/helpers for app user display), `queryLogger.ts` (Drizzle logger for dev/debug).
@@ -171,7 +171,7 @@ sequenceDiagram
   API->>FVS: save(workspaceId, formVersionId, enqueueProvision: true)
   FVS->>DB: transaction
   DB->>Repo: appendFormVersionRevision(tx)
-  Repo->>Outbox: insert form_version_revision
+  Repo->>DB: insert form_version_revision row
   alt eventType === 'publish'
     FVS->>Repo: updateFormVersionDraft(state: 'published', tx)
   end
@@ -191,6 +191,9 @@ Later, the outbox worker claims the row, calls the form-engine handler (e.g. pro
 - **Single Postgres schema:** `soba`. All tables are in this schema.
 - **Schema files:**
   - `core.ts` — identity_provider, app_user, user_identity, workspace, workspace_membership, workspace_group, workspace_group_membership
+  - `roles.ts` — role_status, role (with source, feature_code; no separate registry)
+  - `codes.ts` — form_status, form_version_state, workspace_membership_role, workspace_membership_status, outbox_status, code_set_registry
+  - `feature.ts` — feature_status, feature
   - `forms.ts` — form, form_version, form_version_revision, submission, submission_revision
   - `integration.ts` — integration_outbox
   - `plugins.enterprise.ts` — enterprise_workspace_binding, enterprise_membership_binding, enterprise_group_binding, enterprise_sync_cursor, enterprise_sync_log
@@ -207,9 +210,14 @@ Later, the outbox worker claims the row, calls the form-engine handler (e.g. pro
 | `formVersionRepo`                     | Create draft, get by id, list by workspace, update draft, append revision, mark deleted                                                            |
 | `submissionRepo`                      | Create submission, get by id, list by workspace, update draft, append revision, mark deleted                                                       |
 | `workspaceRepo`                       | Ensure home workspace for a user                                                                                                                   |
-| `membershipRepo`                      | Resolve user from identity, find/create user by identity, actorBelongsToWorkspace, getWorkspaceForUser, invalidate cache, list workspaces for user |
+| `membershipRepo`                      | findOrCreateUserByIdentity, actorBelongsToWorkspace, getWorkspaceForUser, invalidate cache, list workspaces for user                              |
 | `outboxRepo`                          | enqueueOutboxEvent, claimOutboxBatch, markOutboxSucceeded, markOutboxFailed                                                                        |
 | `appUserRepo`                         | findUserIdByEmail (and related app user lookups)                                                                                                   |
+| `sobaAdminRepo`                       | SOBA platform admin grants (idp/direct), refresh on login                                                                                          |
+| `identityLookup`                      | findUserIdByIdentity (provider code + subject)                                                                                                      |
+| `roleRepo`                            | Role lookups and list (filter by code, source, status, onlyEnabledFeatures)                                                                        |
+| `featureRepo`                        | Feature registry (isFeatureEnabled, listFeatures)                                                                                                   |
+| `codeSetRegistryRepo`                | Code set registry and lookups (getByCodeSet, listRegistry)                                                                                         |
 | `repos/plugins/enterpriseBindingRepo` | findWorkspaceByEnterpriseExternalId and related enterprise bindings                                                                                |
 
 Repos accept optional `DbOrTx` for use inside `db.transaction()`.

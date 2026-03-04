@@ -117,15 +117,10 @@ export class SubmissionService {
   }
 
   async delete(input: DeleteInput) {
-    return markSubmissionDeleted(
-      input.workspaceId,
-      input.submissionId,
-      input.actorId,
-      input.actorDisplayLabel,
-    );
+    return markSubmissionDeleted(input.workspaceId, input.submissionId, input.actorDisplayLabel);
   }
 
-  async get(workspaceId: string, actorId: string, submissionId: string) {
+  async get(workspaceId: string, submissionId: string) {
     return getSubmissionById(workspaceId, submissionId);
   }
 

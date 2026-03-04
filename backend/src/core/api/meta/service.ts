@@ -5,9 +5,8 @@ import { getFormEnginePlugins } from '../../integrations/form-engine/FormEngineR
 import { getPluginCatalog } from '../../integrations/plugins/PluginRegistry';
 import { isFeatureEnabled, listFeatures } from '../../db/repos/featureRepo';
 import { roleService } from '../../services/roleService';
-import { decodeCursor, encodeCursor } from '../shared/pagination';
 
-export const metaApiService = {
+export class MetaApiService {
   getPlugins() {
     const config = getWorkspacePluginsConfig();
     const plugins = getPluginCatalog();
@@ -28,7 +27,7 @@ export const metaApiService = {
         enabled: activeCodes.has(plugin.code),
       })),
     };
-  },
+  }
 
   async getFeatures() {
     const features = await listFeatures();
@@ -42,7 +41,7 @@ export const metaApiService = {
         enabled: isFeatureEnabled(f.status),
       })),
     };
-  },
+  }
 
   getBuild() {
     return {
@@ -53,7 +52,7 @@ export const metaApiService = {
       gitTag: env.getOptionalEnv('GIT_TAG') ?? 'unknown',
       imageTag: env.getOptionalEnv('IMAGE_TAG') ?? 'unknown',
     };
-  },
+  }
 
   async getFormEngines() {
     const plugins = getFormEnginePlugins();
@@ -66,50 +65,17 @@ export const metaApiService = {
         isDefault: plugin.code === (defaultCode ?? plugins[0]?.code ?? null),
       })),
     };
-  },
+  }
 
-  async getRoles(options?: { onlyEnabledFeatures?: boolean }) {
-    return roleService.getRegisteredRoles(options);
-  },
-
-  async getRolesPaginated(query: {
-    limit: number;
-    cursor?: string;
+  async getRoles(filters?: {
+    code?: string[];
+    source?: string;
+    status?: string;
     onlyEnabledFeatures?: boolean;
   }) {
-    let afterRoleCode: string | undefined;
-    if (query.cursor) {
-      try {
-        const decoded = decodeCursor(query.cursor);
-        if (decoded.m === 'id') afterRoleCode = decoded.id;
-      } catch {
-        // invalid cursor ignored; first page
-      }
-    }
-    const { items, hasMore } = await roleService.getRegisteredRolesPaginated({
-      limit: query.limit,
-      afterRoleCode,
-      onlyEnabledFeatures: query.onlyEnabledFeatures,
-    });
-    const lastItem = items[items.length - 1];
-    const nextCursor =
-      hasMore && lastItem ? encodeCursor({ m: 'id', id: lastItem.roleCode }) : null;
-    return {
-      roles: items,
-      page: {
-        limit: query.limit,
-        hasMore,
-        nextCursor,
-        cursorMode: 'id' as const,
-      },
-      filters: {
-        only_enabled_features: query.onlyEnabledFeatures,
-      },
-      sort: 'roleCode:desc' as const,
-    };
-  },
+    const roles = await roleService.listRoles(filters);
+    return { roles };
+  }
+}
 
-  async getRole(roleCode: string, options?: { onlyEnabledFeatures?: boolean }) {
-    return roleService.getRole(roleCode, options);
-  },
-};
+export const metaApiService = new MetaApiService();

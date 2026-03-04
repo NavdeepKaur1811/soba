@@ -61,7 +61,7 @@ const toSubmissionListItemDto = (item: {
 export function createSubmissionsApiService(submissionService: SubmissionService) {
   return {
     get: async (ctx: SubmissionsContextInput, submissionId: string) => {
-      const row = await submissionService.get(ctx.workspaceId, ctx.actorId, submissionId);
+      const row = await submissionService.get(ctx.workspaceId, submissionId);
       return row ? toSubmissionDto(row) : null;
     },
 

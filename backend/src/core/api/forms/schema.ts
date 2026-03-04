@@ -19,11 +19,17 @@ export const CreateFormVersionBodySchema = z
   })
   .openapi('Forms_CreateFormVersionBody');
 
-export const UpdateFormVersionParamsSchema = z
+export const FormIdParamsSchema = z
   .object({
     id: z.string().min(1),
   })
-  .openapi('Forms_UpdateFormVersionParams');
+  .openapi('Forms_FormIdParams');
+
+export const FormVersionIdParamsSchema = z
+  .object({
+    id: z.string().min(1),
+  })
+  .openapi('Forms_FormVersionIdParams');
 
 export const UpdateFormVersionBodySchema = z
   .object({
@@ -187,7 +193,7 @@ export const registerFormsOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.forms'],
     security: [{ bearerAuth: [] }],
     request: {
-      params: UpdateFormVersionParamsSchema,
+      params: FormIdParamsSchema,
     },
     responses: {
       200: {
@@ -240,7 +246,7 @@ export const registerFormsOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.forms'],
     security: [{ bearerAuth: [] }],
     request: {
-      params: UpdateFormVersionParamsSchema,
+      params: FormIdParamsSchema,
       body: {
         required: false,
         content: {
@@ -294,7 +300,7 @@ export const registerFormsOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.forms'],
     security: [{ bearerAuth: [] }],
     request: {
-      params: UpdateFormVersionParamsSchema,
+      params: FormVersionIdParamsSchema,
     },
     responses: {
       200: {
@@ -343,7 +349,7 @@ export const registerFormsOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.forms'],
     security: [{ bearerAuth: [] }],
     request: {
-      params: UpdateFormVersionParamsSchema,
+      params: FormVersionIdParamsSchema,
       body: {
         required: false,
         content: {
@@ -397,7 +403,7 @@ export const registerFormsOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.forms'],
     security: [{ bearerAuth: [] }],
     request: {
-      params: UpdateFormVersionParamsSchema,
+      params: FormVersionIdParamsSchema,
     },
     responses: {
       204: {
@@ -415,7 +421,7 @@ export const registerFormsOpenApi = (registry: OpenAPIRegistry) => {
     tags: ['core.forms'],
     security: [{ bearerAuth: [] }],
     request: {
-      params: UpdateFormVersionParamsSchema,
+      params: FormIdParamsSchema,
     },
     responses: {
       204: {

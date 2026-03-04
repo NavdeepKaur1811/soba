@@ -103,10 +103,12 @@ CREATE TABLE "soba"."workspace" (
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."feature_status" (
-	"code" text PRIMARY KEY NOT NULL,
+	"code" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
 	"display" text NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
+	"is_active" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "feature_status_code_source_pk" PRIMARY KEY("code","source")
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."feature" (
@@ -121,13 +123,6 @@ CREATE TABLE "soba"."feature" (
 	"updated_by" text
 );
 --> statement-breakpoint
-CREATE TABLE "soba"."role_registry" (
-	"role_code" text PRIMARY KEY NOT NULL,
-	"provider_type" text NOT NULL,
-	"feature_code" text,
-	CONSTRAINT "role_registry_core_feature_check" CHECK ((("soba"."role_registry"."provider_type" = 'core' AND "soba"."role_registry"."feature_code" IS NULL) OR ("soba"."role_registry"."provider_type" = 'feature' AND "soba"."role_registry"."feature_code" IS NOT NULL)))
-);
---> statement-breakpoint
 CREATE TABLE "soba"."role_status" (
 	"code" text PRIMARY KEY NOT NULL,
 	"display" text NOT NULL,
@@ -140,52 +135,57 @@ CREATE TABLE "soba"."role" (
 	"name" text NOT NULL,
 	"description" text,
 	"status" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
+	"feature_code" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_by" text,
 	"updated_by" text
 );
 --> statement-breakpoint
-CREATE TABLE "soba"."code_set_registry" (
-	"code_set" text PRIMARY KEY NOT NULL,
-	"provider_type" text NOT NULL,
-	"feature_code" text,
-	CONSTRAINT "code_set_registry_core_feature_check" CHECK ((("soba"."code_set_registry"."provider_type" = 'core' AND "soba"."code_set_registry"."feature_code" IS NULL) OR ("soba"."code_set_registry"."provider_type" = 'feature' AND "soba"."code_set_registry"."feature_code" IS NOT NULL)))
-);
---> statement-breakpoint
 CREATE TABLE "soba"."form_status" (
-	"code" text PRIMARY KEY NOT NULL,
+	"code" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
 	"display" text NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
+	"is_active" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "form_status_code_source_pk" PRIMARY KEY("code","source")
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."form_version_state" (
-	"code" text PRIMARY KEY NOT NULL,
+	"code" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
 	"display" text NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
+	"is_active" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "form_version_state_code_source_pk" PRIMARY KEY("code","source")
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."outbox_status" (
-	"code" text PRIMARY KEY NOT NULL,
+	"code" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
 	"display" text NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
+	"is_active" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "outbox_status_code_source_pk" PRIMARY KEY("code","source")
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."workspace_membership_role" (
-	"code" text PRIMARY KEY NOT NULL,
+	"code" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
 	"display" text NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
+	"is_active" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "workspace_membership_role_code_source_pk" PRIMARY KEY("code","source")
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."workspace_membership_status" (
-	"code" text PRIMARY KEY NOT NULL,
+	"code" text NOT NULL,
+	"source" text DEFAULT 'core' NOT NULL,
 	"display" text NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
-	"is_active" boolean DEFAULT true NOT NULL
+	"is_active" boolean DEFAULT true NOT NULL,
+	CONSTRAINT "workspace_membership_status_code_source_pk" PRIMARY KEY("code","source")
 );
 --> statement-breakpoint
 CREATE TABLE "soba"."form_version_revision" (
@@ -369,9 +369,7 @@ ALTER TABLE "soba"."workspace_membership" ADD CONSTRAINT "workspace_membership_w
 ALTER TABLE "soba"."workspace_membership" ADD CONSTRAINT "workspace_membership_user_id_app_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace_membership" ADD CONSTRAINT "workspace_membership_invited_by_user_id_app_user_id_fk" FOREIGN KEY ("invited_by_user_id") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."workspace" ADD CONSTRAINT "workspace_parent_workspace_id_workspace_id_fk" FOREIGN KEY ("parent_workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."role_registry" ADD CONSTRAINT "role_registry_role_code_role_code_fk" FOREIGN KEY ("role_code") REFERENCES "soba"."role"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."role_registry" ADD CONSTRAINT "role_registry_feature_code_feature_code_fk" FOREIGN KEY ("feature_code") REFERENCES "soba"."feature"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "soba"."code_set_registry" ADD CONSTRAINT "code_set_registry_feature_code_feature_code_fk" FOREIGN KEY ("feature_code") REFERENCES "soba"."feature"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "soba"."role" ADD CONSTRAINT "role_feature_code_feature_code_fk" FOREIGN KEY ("feature_code") REFERENCES "soba"."feature"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version_revision" ADD CONSTRAINT "form_version_revision_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "soba"."workspace"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version_revision" ADD CONSTRAINT "form_version_revision_form_version_id_form_version_id_fk" FOREIGN KEY ("form_version_id") REFERENCES "soba"."form_version"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "soba"."form_version_revision" ADD CONSTRAINT "form_version_revision_changed_by_app_user_id_fk" FOREIGN KEY ("changed_by") REFERENCES "soba"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

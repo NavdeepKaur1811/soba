@@ -90,7 +90,7 @@ export class FormService {
     return updateForm(input);
   }
 
-  async get(workspaceId: string, actorId: string, formId: string): Promise<FormRecord | null> {
+  async get(workspaceId: string, formId: string): Promise<FormRecord | null> {
     return getFormById(workspaceId, formId);
   }
 
@@ -99,6 +99,6 @@ export class FormService {
   }
 
   async delete(input: DeleteInput) {
-    return markFormDeleted(input.workspaceId, input.formId, input.actorId, input.actorDisplayLabel);
+    return markFormDeleted(input.workspaceId, input.formId, input.actorDisplayLabel);
   }
 }

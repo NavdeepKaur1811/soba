@@ -3,13 +3,14 @@ import { z } from 'zod';
 import {
   CreateFormBodySchema,
   CreateFormVersionBodySchema,
+  FormIdParamsSchema,
+  FormVersionIdParamsSchema,
   ListFormsQuerySchema,
   ListFormVersionsQuerySchema,
   SaveFormVersionBodySchema,
   SaveFormVersionParamsSchema,
   UpdateFormBodySchema,
   UpdateFormVersionBodySchema,
-  UpdateFormVersionParamsSchema,
 } from './schema';
 import { formsApiService } from './service';
 import { asyncHandler } from '../shared/asyncHandler';
@@ -18,9 +19,10 @@ import type { Request } from 'express';
 
 type CreateFormBody = z.infer<typeof CreateFormBodySchema>;
 type CreateFormVersionBody = z.infer<typeof CreateFormVersionBodySchema>;
+type FormIdParams = z.infer<typeof FormIdParamsSchema>;
+type FormVersionIdParams = z.infer<typeof FormVersionIdParamsSchema>;
 type UpdateFormBody = z.infer<typeof UpdateFormBodySchema>;
 type UpdateFormVersionBody = z.infer<typeof UpdateFormVersionBodySchema>;
-type UpdateFormVersionParams = z.infer<typeof UpdateFormVersionParamsSchema>;
 type SaveFormVersionBody = z.infer<typeof SaveFormVersionBodySchema>;
 type SaveFormVersionParams = z.infer<typeof SaveFormVersionParamsSchema>;
 type ListFormsQuery = z.infer<typeof ListFormsQuerySchema>;
@@ -35,7 +37,7 @@ export const createForm = asyncHandler(
 );
 
 export const updateForm = asyncHandler(
-  async (req: Request<UpdateFormVersionParams, unknown, UpdateFormBody>, res: Response) => {
+  async (req: Request<FormIdParams, unknown, UpdateFormBody>, res: Response) => {
     const ctx = req.coreContext!;
     const result = await formsApiService.updateForm(ctx, req.params.id, req.body);
     if (!result) {
@@ -45,16 +47,14 @@ export const updateForm = asyncHandler(
   },
 );
 
-export const getForm = asyncHandler(
-  async (req: Request<UpdateFormVersionParams>, res: Response) => {
-    const ctx = req.coreContext!;
-    const result = await formsApiService.getForm(ctx, req.params.id);
-    if (!result) {
-      throw new NotFoundError('Form not found');
-    }
-    res.json(result);
-  },
-);
+export const getForm = asyncHandler(async (req: Request<FormIdParams>, res: Response) => {
+  const ctx = req.coreContext!;
+  const result = await formsApiService.getForm(ctx, req.params.id);
+  if (!result) {
+    throw new NotFoundError('Form not found');
+  }
+  res.json(result);
+});
 
 export const listForms = asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.coreContext!;
@@ -63,7 +63,7 @@ export const listForms = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getFormVersion = asyncHandler(
-  async (req: Request<UpdateFormVersionParams>, res: Response) => {
+  async (req: Request<FormVersionIdParams>, res: Response) => {
     const ctx = req.coreContext!;
     const result = await formsApiService.getFormVersion(ctx, req.params.id);
     if (!result) {
@@ -91,7 +91,7 @@ export const createFormVersion = asyncHandler(
 );
 
 export const updateFormVersion = asyncHandler(
-  async (req: Request<UpdateFormVersionParams, unknown, UpdateFormVersionBody>, res: Response) => {
+  async (req: Request<FormVersionIdParams, unknown, UpdateFormVersionBody>, res: Response) => {
     const ctx = req.coreContext!;
     const result = await formsApiService.updateDraft(ctx, req.params.id, req.body.state);
     if (!result) {
@@ -110,7 +110,7 @@ export const saveFormVersion = asyncHandler(
 );
 
 export const deleteFormVersion = asyncHandler(
-  async (req: Request<UpdateFormVersionParams>, res: Response) => {
+  async (req: Request<FormVersionIdParams>, res: Response) => {
     const ctx = req.coreContext!;
     const result = await formsApiService.delete(ctx, req.params.id);
     if (!result) {
@@ -120,13 +120,11 @@ export const deleteFormVersion = asyncHandler(
   },
 );
 
-export const deleteForm = asyncHandler(
-  async (req: Request<UpdateFormVersionParams>, res: Response) => {
-    const ctx = req.coreContext!;
-    const result = await formsApiService.deleteForm(ctx, req.params.id);
-    if (!result) {
-      throw new NotFoundError('Form not found');
-    }
-    res.status(204).send();
-  },
-);
+export const deleteForm = asyncHandler(async (req: Request<FormIdParams>, res: Response) => {
+  const ctx = req.coreContext!;
+  const result = await formsApiService.deleteForm(ctx, req.params.id);
+  if (!result) {
+    throw new NotFoundError('Form not found');
+  }
+  res.status(204).send();
+});

@@ -1,8 +1,8 @@
-import { sql } from 'drizzle-orm';
-import { boolean, check, integer, text } from 'drizzle-orm/pg-core';
+import { boolean, integer, text } from 'drizzle-orm/pg-core';
 import { auditColumns } from './audit';
 import { sobaSchema } from './sobaSchema';
 import { features } from './feature';
+import { CODE_SOURCE_CORE } from './codes';
 
 /**
  * Role status code table. Used by soba.roles.status.
@@ -15,34 +15,15 @@ export const roleStatus = sobaSchema.table('role_status', {
 });
 
 /**
- * DB-backed role registry. status values reference role_status semantically.
- * Extensible: features can register roles via role_registry.
+ * DB-backed roles. source = 'core' or 'feature'; feature_code set when source is 'feature'.
+ * Extensible: features can add roles with source = 'feature' and feature_code = their code.
  */
 export const roles = sobaSchema.table('role', {
   code: text('code').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   status: text('status').notNull(),
+  source: text('source').notNull().default(CODE_SOURCE_CORE),
+  featureCode: text('feature_code').references(() => features.code),
   ...auditColumns(),
 });
-
-/**
- * Registry of roles: core vs feature-owned. feature_code is nullable FK;
- * core rows have feature_code null, feature rows have feature_code set.
- */
-export const roleRegistry = sobaSchema.table(
-  'role_registry',
-  {
-    roleCode: text('role_code')
-      .primaryKey()
-      .references(() => roles.code),
-    providerType: text('provider_type').notNull(),
-    featureCode: text('feature_code').references(() => features.code),
-  },
-  (table) => [
-    check(
-      'role_registry_core_feature_check',
-      sql`((${table.providerType} = 'core' AND ${table.featureCode} IS NULL) OR (${table.providerType} = 'feature' AND ${table.featureCode} IS NOT NULL))`,
-    ),
-  ],
-);

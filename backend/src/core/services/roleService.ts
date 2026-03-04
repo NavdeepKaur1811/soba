@@ -1,56 +1,52 @@
-import { getRoleByCode, listRoles } from '../db/repos/roleRepo';
-import { getByRoleCode, listRegistry, listRegistryPaginated } from '../db/repos/roleRegistryRepo';
+import { getRoleByCode, listRoles as repoListRoles } from '../db/repos/roleRepo';
+import type { ListRolesFilters } from '../db/repos/roleRepo';
 import { FeatureStatus } from '../db/codes';
-
-export interface RegisteredRole {
-  roleCode: string;
-  providerType: string;
-  featureCode: string | null;
-}
+import { getFeatureByCode } from '../db/repos/featureRepo';
 
 export interface RoleRow {
   code: string;
   name: string;
   description: string | null;
   status: string;
+  source: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export const roleService = {
-  async getRegisteredRoles(options?: { onlyEnabledFeatures?: boolean }): Promise<RegisteredRole[]> {
-    return listRegistry(options);
-  },
-
-  async getRegisteredRolesPaginated(options: {
-    limit: number;
-    afterRoleCode?: string;
-    onlyEnabledFeatures?: boolean;
-  }): Promise<{ items: RegisteredRole[]; hasMore: boolean }> {
-    return listRegistryPaginated(options);
-  },
-
+export class RoleService {
   async getRole(
     roleCode: string,
     options?: { onlyEnabledFeatures?: boolean },
   ): Promise<RoleRow | null> {
-    const registryRow = await getByRoleCode(roleCode);
-    if (!registryRow) return null;
-    if (
-      registryRow.providerType === 'feature' &&
-      registryRow.featureCode &&
-      options?.onlyEnabledFeatures !== false
-    ) {
-      const { getFeatureByCode } = await import('../db/repos/featureRepo');
-      const feature = await getFeatureByCode(registryRow.featureCode);
+    const row = await getRoleByCode(roleCode);
+    if (!row) return null;
+    if (row.source !== 'core' && row.featureCode && options?.onlyEnabledFeatures !== false) {
+      const feature = await getFeatureByCode(row.featureCode);
       if (feature?.status !== FeatureStatus.enabled) return null;
     }
-    return getRoleByCode(roleCode);
-  },
+    return {
+      code: row.code,
+      name: row.name,
+      description: row.description,
+      status: row.status,
+      source: row.sourceDisplay,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
 
-  async listRoles(options?: { onlyEnabledFeatures?: boolean }): Promise<RoleRow[]> {
-    return listRoles(options);
-  },
+  async listRoles(filters?: ListRolesFilters): Promise<RoleRow[]> {
+    const rows = await repoListRoles(filters);
+    return rows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      description: r.description,
+      status: r.status,
+      source: r.sourceDisplay,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+  }
 
   async isValidRole(
     roleCode: string,
@@ -58,5 +54,7 @@ export const roleService = {
   ): Promise<boolean> {
     const row = await this.getRole(roleCode, options);
     return row !== null;
-  },
-};
+  }
+}
+
+export const roleService = new RoleService();

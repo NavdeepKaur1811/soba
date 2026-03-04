@@ -145,7 +145,7 @@ export function createFormsApiService(
     },
 
     getForm: async (ctx: FormsContextInput, formId: string) => {
-      const row = await formService.get(ctx.workspaceId, ctx.actorId, formId);
+      const row = await formService.get(ctx.workspaceId, formId);
       return row ? toFormDto(row) : null;
     },
 
@@ -186,7 +186,7 @@ export function createFormsApiService(
     },
 
     getFormVersion: async (ctx: FormsContextInput, formVersionId: string) => {
-      const row = await formVersionService.get(ctx.workspaceId, ctx.actorId, formVersionId);
+      const row = await formVersionService.get(ctx.workspaceId, formVersionId);
       return row ? toFormVersionDto(row) : null;
     },
 

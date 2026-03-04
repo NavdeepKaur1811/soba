@@ -1,20 +1,26 @@
-import { boolean, integer, text } from 'drizzle-orm/pg-core';
+import { boolean, integer, primaryKey, text } from 'drizzle-orm/pg-core';
 import { auditColumns } from './audit';
 import { sobaSchema } from './core';
+import { CODE_SOURCE_CORE } from './codes';
 
 /**
- * Feature status code table. Values: enabled, disabled, optional experimental/deprecated.
- * Used by soba.feature.status.
+ * Feature status code table. Used by soba.feature.status.
+ * Core and features both insert here; source = 'core' or feature code.
  */
-export const featureStatus = sobaSchema.table('feature_status', {
-  code: text('code').primaryKey(),
-  display: text('display').notNull(),
-  sortOrder: integer('sort_order').notNull().default(0),
-  isActive: boolean('is_active').notNull().default(true),
-});
+export const featureStatus = sobaSchema.table(
+  'feature_status',
+  {
+    code: text('code').notNull(),
+    source: text('source').notNull().default(CODE_SOURCE_CORE),
+    display: text('display').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    isActive: boolean('is_active').notNull().default(true),
+  },
+  (table) => [primaryKey({ columns: [table.code, table.source] })],
+);
 
 /**
- * DB-backed feature registry. status values come from feature_status code table (e.g. enabled, disabled).
+ * DB-backed feature registry. status values reference feature_status code table.
  */
 export const features = sobaSchema.table('feature', {
   code: text('code').primaryKey(),

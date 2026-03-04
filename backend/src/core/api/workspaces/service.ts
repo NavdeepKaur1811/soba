@@ -6,7 +6,7 @@ import {
 } from '../../db/repos/membershipRepo';
 import { decodeCursorAndMode, buildNextCursor, type CursorSort } from '../shared/pagination';
 
-export const workspacesApiService = {
+export class WorkspacesApiService {
   async list(
     actorId: string,
     query: {
@@ -58,7 +58,7 @@ export const workspacesApiService = {
       },
       sort: sort ?? 'id:desc',
     };
-  },
+  }
 
   async getCurrent(workspaceId: string, actorId: string) {
     const row = await getWorkspaceForUser(workspaceId, actorId);
@@ -71,5 +71,7 @@ export const workspacesApiService = {
       role: row.role,
       status: row.status,
     };
-  },
-};
+  }
+}
+
+export const workspacesApiService = new WorkspacesApiService();

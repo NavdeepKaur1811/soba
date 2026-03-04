@@ -17,20 +17,19 @@ import {
 import { db, pool } from './client';
 import {
   appUsers,
-  codeSetRegistry,
   featureStatus,
   features,
   formStatus,
   formVersionState,
   identityProviders,
   outboxStatus,
-  roleRegistry,
   roleStatus,
   roles,
   userIdentities,
   workspaceMembershipRole,
   workspaceMembershipStatus,
 } from './schema';
+import { CODE_SOURCE_CORE } from './schema/codes';
 
 const SYSTEM_PROVIDER_CODE = 'system';
 const DEFAULT_SYSTEM_SUBJECT = 'soba-system';
@@ -57,13 +56,177 @@ const ensureIdentityProvider = async (code: string, name: string, createdByLabel
 
 const seedFeatureStatus = async () => {
   const rows = [
-    { code: FeatureStatus.enabled, display: 'Enabled', sortOrder: 0, isActive: true },
-    { code: FeatureStatus.disabled, display: 'Disabled', sortOrder: 1, isActive: true },
-    { code: FeatureStatus.experimental, display: 'Experimental', sortOrder: 2, isActive: true },
-    { code: FeatureStatus.deprecated, display: 'Deprecated', sortOrder: 3, isActive: true },
+    {
+      code: FeatureStatus.enabled,
+      source: CODE_SOURCE_CORE,
+      display: 'Enabled',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      code: FeatureStatus.disabled,
+      source: CODE_SOURCE_CORE,
+      display: 'Disabled',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      code: FeatureStatus.experimental,
+      source: CODE_SOURCE_CORE,
+      display: 'Experimental',
+      sortOrder: 2,
+      isActive: true,
+    },
+    {
+      code: FeatureStatus.deprecated,
+      source: CODE_SOURCE_CORE,
+      display: 'Deprecated',
+      sortOrder: 3,
+      isActive: true,
+    },
   ];
   for (const row of rows) {
     await db.insert(featureStatus).values(row).onConflictDoNothing();
+  }
+};
+
+const seedCodeTables = async () => {
+  const formStatusRows = [
+    {
+      code: FormStatus.active,
+      source: CODE_SOURCE_CORE,
+      display: 'Active',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      code: FormStatus.archived,
+      source: CODE_SOURCE_CORE,
+      display: 'Archived',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      code: FormStatus.deleted,
+      source: CODE_SOURCE_CORE,
+      display: 'Deleted',
+      sortOrder: 2,
+      isActive: true,
+    },
+  ];
+  for (const row of formStatusRows) {
+    await db.insert(formStatus).values(row).onConflictDoNothing();
+  }
+  const formVersionStateRows = [
+    {
+      code: FormVersionState.draft,
+      source: CODE_SOURCE_CORE,
+      display: 'Draft',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      code: FormVersionState.published,
+      source: CODE_SOURCE_CORE,
+      display: 'Published',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      code: FormVersionState.deleted,
+      source: CODE_SOURCE_CORE,
+      display: 'Deleted',
+      sortOrder: 2,
+      isActive: true,
+    },
+  ];
+  for (const row of formVersionStateRows) {
+    await db.insert(formVersionState).values(row).onConflictDoNothing();
+  }
+  const workspaceMembershipRoleRows = [
+    {
+      code: WorkspaceMembershipRole.owner,
+      source: CODE_SOURCE_CORE,
+      display: 'Owner',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      code: WorkspaceMembershipRole.admin,
+      source: CODE_SOURCE_CORE,
+      display: 'Admin',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      code: WorkspaceMembershipRole.member,
+      source: CODE_SOURCE_CORE,
+      display: 'Member',
+      sortOrder: 2,
+      isActive: true,
+    },
+    {
+      code: WorkspaceMembershipRole.viewer,
+      source: CODE_SOURCE_CORE,
+      display: 'Viewer',
+      sortOrder: 3,
+      isActive: true,
+    },
+  ];
+  for (const row of workspaceMembershipRoleRows) {
+    await db.insert(workspaceMembershipRole).values(row).onConflictDoNothing();
+  }
+  const workspaceMembershipStatusRows = [
+    {
+      code: WorkspaceMembershipStatus.active,
+      source: CODE_SOURCE_CORE,
+      display: 'Active',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      code: WorkspaceMembershipStatus.inactive,
+      source: CODE_SOURCE_CORE,
+      display: 'Inactive',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      code: WorkspaceMembershipStatus.pending,
+      source: CODE_SOURCE_CORE,
+      display: 'Pending',
+      sortOrder: 2,
+      isActive: true,
+    },
+  ];
+  for (const row of workspaceMembershipStatusRows) {
+    await db.insert(workspaceMembershipStatus).values(row).onConflictDoNothing();
+  }
+  const outboxStatusRows = [
+    {
+      code: OutboxStatus.pending,
+      source: CODE_SOURCE_CORE,
+      display: 'Pending',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      code: OutboxStatus.processing,
+      source: CODE_SOURCE_CORE,
+      display: 'Processing',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      code: OutboxStatus.done,
+      source: CODE_SOURCE_CORE,
+      display: 'Done',
+      sortOrder: 2,
+      isActive: true,
+    },
+  ];
+  for (const row of outboxStatusRows) {
+    await db.insert(outboxStatus).values(row).onConflictDoNothing();
   }
 };
 
@@ -99,20 +262,6 @@ const seedFeatures = async () => {
   }
 };
 
-const seedCodeSetRegistry = async () => {
-  const coreSets = [
-    { codeSet: 'feature_status', providerType: 'core' as const, featureCode: null },
-    { codeSet: 'form_status', providerType: 'core' as const, featureCode: null },
-    { codeSet: 'form_version_state', providerType: 'core' as const, featureCode: null },
-    { codeSet: 'workspace_membership_role', providerType: 'core' as const, featureCode: null },
-    { codeSet: 'workspace_membership_status', providerType: 'core' as const, featureCode: null },
-    { codeSet: 'outbox_status', providerType: 'core' as const, featureCode: null },
-  ];
-  for (const row of coreSets) {
-    await db.insert(codeSetRegistry).values(row).onConflictDoNothing();
-  }
-};
-
 const seedRoleStatus = async () => {
   const rows = [
     { code: RoleStatus.active, display: 'Active', sortOrder: 0, isActive: true },
@@ -130,12 +279,16 @@ const seedRoles = async () => {
       name: 'Workspace owner',
       description: null,
       status: RoleStatus.active,
+      source: CODE_SOURCE_CORE,
+      featureCode: null,
     },
     {
       code: Roles.form_owner,
       name: 'Form owner',
       description: null,
       status: RoleStatus.active,
+      source: CODE_SOURCE_CORE,
+      featureCode: null,
     },
   ];
   for (const row of roleRows) {
@@ -146,69 +299,13 @@ const seedRoles = async () => {
   }
 };
 
-const seedRoleRegistry = async () => {
-  const rows = [
-    { roleCode: Roles.workspace_owner, providerType: 'core' as const, featureCode: null },
-    { roleCode: Roles.form_owner, providerType: 'core' as const, featureCode: null },
-  ];
-  for (const row of rows) {
-    await db.insert(roleRegistry).values(row).onConflictDoNothing();
-  }
-};
-
-const seedCodeTables = async () => {
-  const formStatusRows = [
-    { code: FormStatus.active, display: 'Active', sortOrder: 0, isActive: true },
-    { code: FormStatus.archived, display: 'Archived', sortOrder: 1, isActive: true },
-    { code: FormStatus.deleted, display: 'Deleted', sortOrder: 2, isActive: true },
-  ];
-  for (const row of formStatusRows) {
-    await db.insert(formStatus).values(row).onConflictDoNothing();
-  }
-  const formVersionStateRows = [
-    { code: FormVersionState.draft, display: 'Draft', sortOrder: 0, isActive: true },
-    { code: FormVersionState.published, display: 'Published', sortOrder: 1, isActive: true },
-    { code: FormVersionState.deleted, display: 'Deleted', sortOrder: 2, isActive: true },
-  ];
-  for (const row of formVersionStateRows) {
-    await db.insert(formVersionState).values(row).onConflictDoNothing();
-  }
-  const workspaceMembershipRoleRows = [
-    { code: WorkspaceMembershipRole.owner, display: 'Owner', sortOrder: 0, isActive: true },
-    { code: WorkspaceMembershipRole.admin, display: 'Admin', sortOrder: 1, isActive: true },
-    { code: WorkspaceMembershipRole.member, display: 'Member', sortOrder: 2, isActive: true },
-    { code: WorkspaceMembershipRole.viewer, display: 'Viewer', sortOrder: 3, isActive: true },
-  ];
-  for (const row of workspaceMembershipRoleRows) {
-    await db.insert(workspaceMembershipRole).values(row).onConflictDoNothing();
-  }
-  const workspaceMembershipStatusRows = [
-    { code: WorkspaceMembershipStatus.active, display: 'Active', sortOrder: 0, isActive: true },
-    { code: WorkspaceMembershipStatus.inactive, display: 'Inactive', sortOrder: 1, isActive: true },
-    { code: WorkspaceMembershipStatus.pending, display: 'Pending', sortOrder: 2, isActive: true },
-  ];
-  for (const row of workspaceMembershipStatusRows) {
-    await db.insert(workspaceMembershipStatus).values(row).onConflictDoNothing();
-  }
-  const outboxStatusRows = [
-    { code: OutboxStatus.pending, display: 'Pending', sortOrder: 0, isActive: true },
-    { code: OutboxStatus.processing, display: 'Processing', sortOrder: 1, isActive: true },
-    { code: OutboxStatus.done, display: 'Done', sortOrder: 2, isActive: true },
-  ];
-  for (const row of outboxStatusRows) {
-    await db.insert(outboxStatus).values(row).onConflictDoNothing();
-  }
-};
-
 const seed = async () => {
   await pool.query('CREATE SCHEMA IF NOT EXISTS soba;');
 
   await seedFeatureStatus();
   await seedFeatures();
-  await seedCodeSetRegistry();
   await seedRoleStatus();
   await seedRoles();
-  await seedRoleRegistry();
   await seedCodeTables();
 
   const systemSubject = env.getSystemSobaSubject() ?? DEFAULT_SYSTEM_SUBJECT;

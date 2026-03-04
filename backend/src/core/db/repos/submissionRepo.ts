@@ -216,7 +216,6 @@ export const appendSubmissionRevision = async (input: SaveSubmissionInput) => {
 export const markSubmissionDeleted = async (
   workspaceId: string,
   submissionId: string,
-  actorId: string,
   actorDisplayLabel: string | null,
 ) => {
   const updated = await db

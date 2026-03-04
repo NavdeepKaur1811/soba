@@ -17,7 +17,8 @@ export const httpLogger = pinoHttp({
     const headerRequestId = req.headers['x-request-id'];
     const existingHeaderId = Array.isArray(headerRequestId) ? headerRequestId[0] : headerRequestId;
     const existingReqId = typeof req.id === 'string' ? req.id : undefined;
-    const requestId: string = normalizedClsRequestId ?? existingReqId ?? existingHeaderId ?? uuidv7();
+    const requestId: string =
+      normalizedClsRequestId ?? existingReqId ?? existingHeaderId ?? uuidv7();
 
     req.id = requestId;
     if (res.getHeader('X-Request-Id') == null) {
@@ -28,7 +29,8 @@ export const httpLogger = pinoHttp({
   },
   customProps(req) {
     return {
-      requestId: (rTracer.id() as string | undefined) ?? (typeof req.id === 'string' ? req.id : undefined),
+      requestId:
+        (rTracer.id() as string | undefined) ?? (typeof req.id === 'string' ? req.id : undefined),
     };
   },
   serializers: {

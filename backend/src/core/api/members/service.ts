@@ -5,7 +5,7 @@ import {
 } from '../../db/repos/membershipRepo';
 import { decodeCursorAndMode, buildNextCursor, type CursorSort } from '../shared/pagination';
 
-export const membersApiService = {
+export class MembersApiService {
   async list(
     workspaceId: string,
     query: {
@@ -56,5 +56,7 @@ export const membersApiService = {
       },
       sort: sort ?? 'id:desc',
     };
-  },
-};
+  }
+}
+
+export const membersApiService = new MembersApiService();

@@ -1,5 +1,5 @@
 {
-  "id": "8e73aa31-effb-4557-994b-7b3483d524f3",
+  "id": "720e6546-25e4-460a-a13b-43949b3fa7a8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1063,8 +1063,15 @@
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
         },
         "display": {
           "name": "display",
@@ -1089,7 +1096,15 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "feature_status_code_source_pk": {
+          "name": "feature_status_code_source_pk",
+          "columns": [
+            "code",
+            "source"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1164,71 +1179,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "soba.role_registry": {
-      "name": "role_registry",
-      "schema": "soba",
-      "columns": {
-        "role_code": {
-          "name": "role_code",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "provider_type": {
-          "name": "provider_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "feature_code": {
-          "name": "feature_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "role_registry_role_code_role_code_fk": {
-          "name": "role_registry_role_code_role_code_fk",
-          "tableFrom": "role_registry",
-          "tableTo": "role",
-          "schemaTo": "soba",
-          "columnsFrom": [
-            "role_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "role_registry_feature_code_feature_code_fk": {
-          "name": "role_registry_feature_code_feature_code_fk",
-          "tableFrom": "role_registry",
-          "tableTo": "feature",
-          "schemaTo": "soba",
-          "columnsFrom": [
-            "feature_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "role_registry_core_feature_check": {
-          "name": "role_registry_core_feature_check",
-          "value": "((\"soba\".\"role_registry\".\"provider_type\" = 'core' AND \"soba\".\"role_registry\".\"feature_code\" IS NULL) OR (\"soba\".\"role_registry\".\"provider_type\" = 'feature' AND \"soba\".\"role_registry\".\"feature_code\" IS NOT NULL))"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "soba.role_status": {
       "name": "role_status",
       "schema": "soba",
@@ -1296,6 +1246,19 @@
           "primaryKey": false,
           "notNull": true
         },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
+        },
+        "feature_code": {
+          "name": "feature_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1324,41 +1287,10 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "soba.code_set_registry": {
-      "name": "code_set_registry",
-      "schema": "soba",
-      "columns": {
-        "code_set": {
-          "name": "code_set",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "provider_type": {
-          "name": "provider_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "feature_code": {
-          "name": "feature_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {
-        "code_set_registry_feature_code_feature_code_fk": {
-          "name": "code_set_registry_feature_code_feature_code_fk",
-          "tableFrom": "code_set_registry",
+        "role_feature_code_feature_code_fk": {
+          "name": "role_feature_code_feature_code_fk",
+          "tableFrom": "role",
           "tableTo": "feature",
           "schemaTo": "soba",
           "columnsFrom": [
@@ -1374,12 +1306,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "code_set_registry_core_feature_check": {
-          "name": "code_set_registry_core_feature_check",
-          "value": "((\"soba\".\"code_set_registry\".\"provider_type\" = 'core' AND \"soba\".\"code_set_registry\".\"feature_code\" IS NULL) OR (\"soba\".\"code_set_registry\".\"provider_type\" = 'feature' AND \"soba\".\"code_set_registry\".\"feature_code\" IS NOT NULL))"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "soba.form_status": {
@@ -1389,8 +1316,15 @@
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
         },
         "display": {
           "name": "display",
@@ -1415,7 +1349,15 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "form_status_code_source_pk": {
+          "name": "form_status_code_source_pk",
+          "columns": [
+            "code",
+            "source"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1428,8 +1370,15 @@
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
         },
         "display": {
           "name": "display",
@@ -1454,7 +1403,15 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "form_version_state_code_source_pk": {
+          "name": "form_version_state_code_source_pk",
+          "columns": [
+            "code",
+            "source"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1467,8 +1424,15 @@
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
         },
         "display": {
           "name": "display",
@@ -1493,7 +1457,15 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "outbox_status_code_source_pk": {
+          "name": "outbox_status_code_source_pk",
+          "columns": [
+            "code",
+            "source"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1506,8 +1478,15 @@
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
         },
         "display": {
           "name": "display",
@@ -1532,7 +1511,15 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "workspace_membership_role_code_source_pk": {
+          "name": "workspace_membership_role_code_source_pk",
+          "columns": [
+            "code",
+            "source"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1545,8 +1532,15 @@
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'core'"
         },
         "display": {
           "name": "display",
@@ -1571,7 +1565,15 @@
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "compositePrimaryKeys": {
+        "workspace_membership_status_code_source_pk": {
+          "name": "workspace_membership_status_code_source_pk",
+          "columns": [
+            "code",
+            "source"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
