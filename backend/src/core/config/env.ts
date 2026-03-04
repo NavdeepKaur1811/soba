@@ -98,6 +98,12 @@ export function createEnvReader(source: EnvSource) {
     getCacheDefaultCode: () => getOptionalEnvFrom(source, 'CACHE_DEFAULT_CODE'),
     getMessageBusDefaultCode: () => getOptionalEnvFrom(source, 'MESSAGEBUS_DEFAULT_CODE'),
     getFormEngineDefaultCode: () => getOptionalEnvFrom(source, 'FORM_ENGINE_DEFAULT_CODE'),
+    getRateLimitWindowMs: () => getNumberEnvFrom(source, 'RATE_LIMIT_WINDOW_MS'),
+    getRateLimitMax: () => getNumberEnvFrom(source, 'RATE_LIMIT_MAX'),
+    getRateLimitApiWindowMs: () => getNumberEnvFrom(source, 'RATE_LIMIT_API_WINDOW_MS'),
+    getRateLimitApiMax: () => getNumberEnvFrom(source, 'RATE_LIMIT_API_MAX'),
+    getRateLimitPublicWindowMs: () => getNumberEnvFrom(source, 'RATE_LIMIT_PUBLIC_WINDOW_MS'),
+    getRateLimitPublicMax: () => getNumberEnvFrom(source, 'RATE_LIMIT_PUBLIC_MAX'),
   };
 }
 
@@ -130,4 +136,10 @@ export const env = {
   getCacheDefaultCode: () => getOptionalEnv('CACHE_DEFAULT_CODE'),
   getMessageBusDefaultCode: () => getOptionalEnv('MESSAGEBUS_DEFAULT_CODE'),
   getFormEngineDefaultCode: () => getOptionalEnv('FORM_ENGINE_DEFAULT_CODE'),
+  getRateLimitWindowMs: () => getNumberEnv('RATE_LIMIT_WINDOW_MS'),
+  getRateLimitMax: () => getNumberEnv('RATE_LIMIT_MAX'),
+  getRateLimitApiWindowMs: () => getNumberEnv('RATE_LIMIT_API_WINDOW_MS'),
+  getRateLimitApiMax: () => getNumberEnv('RATE_LIMIT_API_MAX'),
+  getRateLimitPublicWindowMs: () => getNumberEnv('RATE_LIMIT_PUBLIC_WINDOW_MS'),
+  getRateLimitPublicMax: () => getNumberEnv('RATE_LIMIT_PUBLIC_MAX'),
 };

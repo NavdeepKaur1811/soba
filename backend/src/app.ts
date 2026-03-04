@@ -14,6 +14,7 @@ import { httpLogger, log } from './core/logging';
 import { resolveActor } from './core/middleware/actor';
 import { requireSobaAdmin } from './core/middleware/requireSobaAdmin';
 import { adminRouter } from './core/api/admin';
+import { globalRateLimit, apiRateLimit, publicRateLimit } from './core/middleware/rateLimit';
 
 const app = express();
 const port = 4000;
@@ -35,12 +36,15 @@ app.use(
 
 app.use(httpLogger);
 
+app.use(globalRateLimit);
+
 // ——— Public routes (no authentication) ———
-app.get('/api/docs/openapi.json', (_req, res) => {
+app.get('/api/docs/openapi.json', publicRateLimit, (_req, res) => {
   res.json(buildOpenApiSpec());
 });
 app.use(
   '/api/docs',
+  publicRateLimit,
   swaggerUi.serve,
   swaggerUi.setup(null, {
     swaggerOptions: {
@@ -50,10 +54,18 @@ app.use(
 );
 
 // ——— Core v1 API ———
-app.use('/api/v1/meta', express.json(), metaRouter);
-app.use('/api/v1/health', healthRouter);
-app.use('/api/v1', express.json(), checkJwt(), resolveActor, coreRouter);
-app.use('/api/v1/admin', express.json(), checkJwt(), resolveActor, requireSobaAdmin, adminRouter);
+app.use('/api/v1/meta', publicRateLimit, express.json(), metaRouter);
+app.use('/api/v1/health', publicRateLimit, healthRouter);
+app.use('/api/v1', apiRateLimit, express.json(), checkJwt(), resolveActor, coreRouter);
+app.use(
+  '/api/v1/admin',
+  apiRateLimit,
+  express.json(),
+  checkJwt(),
+  resolveActor,
+  requireSobaAdmin,
+  adminRouter,
+);
 
 app.listen(port, () => {
   log.info({ port }, 'Express is listening');
